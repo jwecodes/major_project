@@ -1,0 +1,73 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Programme {
+  id          Int       @id @default(autoincrement())
+  session     String
+  code        String    @unique
+  name        String
+  duration    Int
+  semesters   Int
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  courses     Course[]
+  faculties   Faculty[] @relation("ProgrammeToFaculty")
+}
+
+model Course {
+  id              Int       @id @default(autoincrement())
+  session         String
+  programmeCode   String
+  programmeName   String
+  code            String    @unique
+  name            String
+  credit          Int
+  type            String
+  numStudents     Int       @map("no_of_students")
+  L               Int
+  T               Int
+  P               Int
+  hours           Int
+  roomNo          String    @map("room_no")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  programme       Programme @relation(fields: [programmeCode], references: [code])
+  faculties       Faculty[]
+}
+
+model Faculty {
+  id            Int       @id @default(autoincrement())
+  programmeCode String
+  programmeName String
+  courseCode    String
+  courseName    String
+  facultyId     String
+  name          String
+  designation   String?
+  contactNo     String?   @map("contact_no")
+  email         String    @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  programme     Programme @relation("ProgrammeToFaculty", fields: [programmeCode], references: [code])
+  course        Course    @relation(fields: [courseCode], references: [code])
+}

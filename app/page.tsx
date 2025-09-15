@@ -5,7 +5,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="max-w-4xl mx-auto text-center">
         <h1 className="text-4xl font-bold text-gray-900 mb-8">
-          University Management System
+          AcadeX - Structured Smart Learning
         </h1>
         <p className="text-xl text-gray-600 mb-12">
           Select your role to access the portal

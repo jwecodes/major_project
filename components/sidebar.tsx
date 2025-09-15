@@ -41,7 +41,7 @@ export function Sidebar({ role }: SidebarProps) {
     <div className="w-64 bg-gray-800 text-white min-h-screen">
       <div className="p-4">
         <Link href="/" className="text-xl font-bold hover:text-gray-300">
-          University Portal
+          AcadeX
         </Link>
         <p className="text-sm text-gray-300 capitalize">{role} Panel</p>
       </div>

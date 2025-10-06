@@ -1,197 +1,494 @@
 'use client'
 import { Sidebar } from '@/components/sidebar'
-import { programmes, courses, faculties } from '@/lib/mokedata'
-import type { Course } from '@/lib/mokedata'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import * as XLSX from 'xlsx'
 
-// Extended interface for comprehensive course data
-interface ExtendedCourse {
+// Updated interfaces to match new schema
+interface Course {
   id: string
-  code: string
-  name: string
-  programme: string
+  session: string        // Academic session (2024-2025)
+  programmeCode: string
+  programmeName: string  // Denormalized
   semester: number
+  courseCode: string
+  courseName: string
+  l: number
+  t: number
+  p: number
+  s: number
   credits: number
-  facultyId?: string
-  lecture: number
-  tutorial: number
-  practical: number
-  type: 'industrial' | 'skill' | 'vac' | 'oe' | 'core' | 'aec' | 'dse' | 'project' | 'int' | 'mooc' | 'other'
-  roomNo: string
-  hours: number
-  studentCount: number
+  totalHours: number
+  courseType: CourseType
+  roomNo: string | null
+  hasAttendance: boolean
+  courseNature: CourseNature
+  courseMode: CourseMode
+  createdAt: string
+  updatedAt: string
+  programme?: {
+    id: string
+    programmeCode: string
+    programmeName: string
+    session: string      // Batch session
+  }
+  _count?: {
+    facultyCourses: number
+  }
 }
 
-export default function CourseManagementPage() {
-  const [selectedSession, setSelectedSession] = useState('')
-  const [selectedProgramme, setSelectedProgramme] = useState('')
-  const [showAddCourseModal, setShowAddCourseModal] = useState(false)
-  const [showBulkUploadModal, setShowBulkUploadModal] = useState(false)
+type CourseType = 'INDUSTRY' | 'SKILL' | 'SEC' | 'CORE' | 'OPEN_ELECTIVE' | 'VAC' | 'AEC' | 'DSE' | 'INTERNSHIP' | 'PROJECT' | 'MOOC' | 'CS' | 'OTHER'
+type CourseNature = 'MANDATORY' | 'ELECTIVE'
+type CourseMode = 'THEORY' | 'PRACTICAL' | 'THEORY_PRACTICAL'
+
+interface Programme {
+  id: string
+  session: string        // Batch session (2022-2026)
+  programmeCode: string
+  programmeName: string
+  duration: number
+  semester: number       // Current semester
+  sections: number
+  noOfStudents: number
+}
+
+// Updated API functions to work with new schema
+const api = {
+  programmes: {
+    getAll: async () => {
+      // Get programmes from all batch sessions
+      const batchSessions = ['2022-2026', '2023-2027', '2024-2028', '2025-2029']
+      const allProgrammes: Programme[] = []
+      
+      for (const batchSession of batchSessions) {
+        try {
+          const response = await fetch(`/api/programmes?session=${encodeURIComponent(batchSession)}`)
+          if (response.ok) {
+            const data = await response.json()
+            allProgrammes.push(...data)
+          }
+        } catch (error) {
+          // Continue if a batch session has no programmes
+        }
+      }
+      
+      return allProgrammes
+    }
+  },
+  courses: {
+    getAll: async (session: string, programmeCode?: string) => {
+      const params = new URLSearchParams({ session })
+      if (programmeCode) params.append('programmeCode', programmeCode)
+      
+      const response = await fetch(`/api/courses?${params.toString()}`)
+      if (!response.ok) throw new Error('Failed to fetch courses')
+      return response.json()
+    },
+    
+    create: async (data: any) => {
+      const response = await fetch('/api/courses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Failed to create course')
+      }
+      return response.json()
+    },
+    
+    createBulk: async (data: any[]) => {
+      const response = await fetch('/api/courses/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courses: data })
+      })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Failed to bulk upload courses')
+      }
+      return response.json()
+    }
+  }
+}
+
+export default function CoursesManagementPage() {
+  const [programmes, setProgrammes] = useState<Programme[]>([])
+  const [courses, setCourses] = useState<Course[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedSession, setSelectedSession] = useState('2024-2025') // Academic session
+  const [selectedProgrammeCode, setSelectedProgrammeCode] = useState('')
+  const [selectedSemester, setSelectedSemester] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
-  
-  // Form state for adding new course
-  const [newCourse, setNewCourse] = useState<Partial<ExtendedCourse>>({
-    code: '',
-    name: '',
-    programme: '',
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [showBulkModal, setShowBulkModal] = useState(false)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [uploadPreview, setUploadPreview] = useState<any[]>([])
+  const [uploading, setUploading] = useState(false)
+
+  const [newCourse, setNewCourse] = useState({
+    session: '2024-2025',
+    programmeCode: '',
+    programmeName: '',
     semester: 1,
-    credits: 3,
-    lecture: 3,
-    tutorial: 1,
-    practical: 0,
-    type: 'core',
-    roomNo: '',
-    hours: 4,
-    studentCount: 60
+    courseCode: '',
+    courseName: '',
+    l: 0,
+    t: 0,
+    s: 0,
+    p: 0,
+    credits: 0,
+    courseType: 'CORE' as CourseType,
+    courseNature: 'MANDATORY' as CourseNature,
+    courseMode: 'THEORY' as CourseMode,
+    hasAttendance: true,
+    roomNo: ''
   })
 
-  // Available sessions
-  const sessions = [
-    '2022-2026',
-    '2023-2027',
-    '2024-2028',
-    '2025-2029',
-    '2026-2030'
-  ]
+  const sessions = ['2024-2025', '2023-2024', '2025-2026'] // Academic sessions
+  const courseTypes: CourseType[] = ['INDUSTRY', 'SKILL', 'SEC', 'CORE', 'OPEN_ELECTIVE', 'VAC', 'AEC', 'DSE', 'INTERNSHIP', 'PROJECT', 'MOOC', 'CS', 'OTHER']
+  const courseNatures: CourseNature[] = ['MANDATORY', 'ELECTIVE']
+  const courseModes: CourseMode[] = ['THEORY', 'PRACTICAL', 'THEORY_PRACTICAL']
 
-  // Course types with descriptions
-  const courseTypes = [
-    { value: 'core', label: 'Core Course', color: 'bg-blue-100 text-blue-800' },
-    { value: 'dse', label: 'Discipline Specific Elective', color: 'bg-purple-100 text-purple-800' },
-    { value: 'oe', label: 'Open Elective', color: 'bg-green-100 text-green-800' },
-    { value: 'aec', label: 'Ability Enhancement Course', color: 'bg-yellow-100 text-yellow-800' },
-    { value: 'vac', label: 'Value Added Course', color: 'bg-indigo-100 text-indigo-800' },
-    { value: 'skill', label: 'Skill Enhancement Course', color: 'bg-orange-100 text-orange-800' },
-    { value: 'industrial', label: 'Industrial Course', color: 'bg-red-100 text-red-800' },
-    { value: 'project', label: 'Project', color: 'bg-pink-100 text-pink-800' },
-    { value: 'int', label: 'Internship', color: 'bg-cyan-100 text-cyan-800' },
-    { value: 'mooc', label: 'MOOC', color: 'bg-emerald-100 text-emerald-800' },
-    { value: 'other', label: 'Other', color: 'bg-gray-100 text-gray-800' }
-  ]
+  useEffect(() => {
+    fetchProgrammes()
+  }, [])
 
-  // Get filtered courses
-  const getFilteredCourses = () => {
-    let filteredCourses = courses
+  useEffect(() => {
+    fetchCourses()
+  }, [selectedSession, selectedProgrammeCode])
 
-    if (selectedProgramme) {
-      const programme = programmes.find(p => p.id === selectedProgramme)
-      if (programme) {
-        filteredCourses = filteredCourses.filter(course => course.programme === programme.name)
-      }
+  const fetchProgrammes = async () => {
+    try {
+      const data = await api.programmes.getAll()
+      setProgrammes(data)
+    } catch (error) {
+      console.error('Error fetching programmes:', error)
     }
+  }
 
-    if (searchTerm) {
-      filteredCourses = filteredCourses.filter(course => 
-        course.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        course.code.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+  const fetchCourses = async () => {
+    try {
+      setLoading(true)
+      const data = await api.courses.getAll(selectedSession, selectedProgrammeCode)
+      setCourses(data)
+    } catch (error) {
+      console.error('Error fetching courses:', error)
+      setCourses([])
+    } finally {
+      setLoading(false)
     }
-
-    return filteredCourses
   }
 
-  // Get course type details
-  const getCourseTypeDetails = (type: string) => {
-    return courseTypes.find(ct => ct.value === type) || courseTypes[courseTypes.length - 1]
-  }
-
-  // Get faculty name
-  const getFacultyName = (facultyId?: string) => {
-    if (!facultyId) return 'Unassigned'
-    const faculty = faculties.find(f => f.id === facultyId)
-    return faculty ? faculty.name : 'Unassigned'
-  }
-
-  // Handle adding new course
-  const handleAddCourse = () => {
-    if (!newCourse.code || !newCourse.name || !selectedProgramme) {
+  const handleAddCourse = async () => {
+    if (!newCourse.courseCode || !newCourse.courseName || !newCourse.programmeCode) {
       alert('Please fill in all required fields')
       return
     }
 
-    const programme = programmes.find(p => p.id === selectedProgramme)
-    
-    const courseToAdd: Course = {
-    id: Date.now().toString(),
-    code: newCourse.code,
-    name: newCourse.name,
-    programme: programme?.name || '',
-    semester: newCourse.semester || 1,
-    credits: newCourse.credits || 3,
-    facultyId: undefined, // Set to null for new courses (unassigned)
-    lecture: newCourse.lecture || 3,
-    tutorial: newCourse.tutorial || 1,
-    practical: newCourse.practical || 0,
-    type: newCourse.type || 'core',
-    roomNo: newCourse.roomNo || '',
-    hours: newCourse.hours || 4,
-    studentCount: newCourse.studentCount || 60
+    try {
+      const selectedProgramme = programmes.find(p => p.programmeCode === newCourse.programmeCode)
+      
+      await api.courses.create({
+        ...newCourse,
+        programmeName: selectedProgramme?.programmeName || '',
+        totalHours: newCourse.l + newCourse.t + newCourse.s + newCourse.p
+      })
+
+      alert('Course added successfully!')
+      fetchCourses()
+      setShowAddModal(false)
+      setNewCourse({
+        session: '2024-2025',
+        programmeCode: '',
+        programmeName: '',
+        semester: 1,
+        courseCode: '',
+        courseName: '',
+        l: 0,
+        t: 0,
+        s: 0,
+        p: 0,
+        credits: 0,
+        courseType: 'CORE',
+        courseNature: 'MANDATORY',
+        courseMode: 'THEORY',
+        hasAttendance: true,
+        roomNo: ''
+      })
+    } catch (error: any) {
+      console.error('Error adding course:', error)
+      alert(error.message || 'Failed to add course')
+    }
   }
 
-    console.log('Adding new course:', courseToAdd)
-    
-    // Reset form
-    setNewCourse({
-      code: '',
-      name: '',
-      programme: '',
-      semester: 1,
-      credits: 3,
-      lecture: 3,
-      tutorial: 1,
-      practical: 0,
-      type: 'core',
-      roomNo: '',
-      hours: 4,
-      studentCount: 60
-    })
-    setShowAddCourseModal(false)
+  const downloadTemplate = () => {
+    const template = [
+      {
+        session: '2024-2025',
+        programmeCode: 'BTECH_CSE',
+        programmeName: 'Bachelor of Technology in Computer Science Engineering',
+        semester: 1,
+        courseCode: 'ETCCCS101',
+        courseName: 'Mathematical Foundations for Computer Science',
+        l: 3,
+        t: 1,
+        s: 0,
+        p: 0,
+        credits: 4,
+        courseType: 'CORE',
+        courseNature: 'MANDATORY',
+        courseMode: 'THEORY',
+        hasAttendance: true,
+        roomNo: 'Room-101'
+      },
+      {
+        session: '2024-2025',
+        programmeCode: 'BTECH_CSE',
+        programmeName: 'Bachelor of Technology in Computer Science Engineering',
+        semester: 1,
+        courseCode: 'ETCCCS102',
+        courseName: 'Programming Fundamentals Lab',
+        l: 0,
+        t: 0,
+        s: 0,
+        p: 4,
+        credits: 2,
+        courseType: 'CORE',
+        courseNature: 'MANDATORY',
+        courseMode: 'PRACTICAL',
+        hasAttendance: true,
+        roomNo: 'Lab-101'
+      }
+    ]
+
+    const ws = XLSX.utils.json_to_sheet(template)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Course Template')
+    XLSX.writeFile(wb, 'course-template.xlsx')
   }
 
-  const filteredCourses = getFilteredCourses()
-  const selectedProgrammeData = programmes.find(p => p.id === selectedProgramme)
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setUploadFile(file)
+
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' })
+      const sheetName = workbook.SheetNames[0]
+      const worksheet = workbook.Sheets[sheetName]
+      const jsonData = XLSX.utils.sheet_to_json(worksheet)
+
+      // Validate required fields
+      const requiredFields = ['session', 'programmeCode', 'programmeName', 'semester', 'courseCode', 'courseName', 'credits']
+      const isValid = jsonData.every((row: any) => 
+        requiredFields.every(field => row.hasOwnProperty(field))
+      )
+
+      if (!isValid) {
+        alert('Excel file is missing required columns. Please use the template.')
+        return
+      }
+
+      setUploadPreview(jsonData.slice(0, 5))
+    } catch (error) {
+      console.error('Error reading file:', error)
+      alert('Error reading Excel file')
+    }
+  }
+
+  const handleBulkUpload = async () => {
+    if (!uploadFile) {
+      alert('Please select a file first')
+      return
+    }
+
+    try {
+      setUploading(true)
+      
+      const arrayBuffer = await uploadFile.arrayBuffer()
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' })
+      const sheetName = workbook.SheetNames[0]
+      const worksheet = workbook.Sheets[sheetName]
+      const jsonData = XLSX.utils.sheet_to_json(worksheet)
+
+      // Transform data for new schema
+      const coursesToUpload = jsonData.map((row: any) => ({
+        session: row.session || selectedSession,
+        programmeCode: row.programmeCode,
+        programmeName: row.programmeName,
+        semester: parseInt(row.semester) || 1,
+        courseCode: row.courseCode,
+        courseName: row.courseName,
+        l: parseInt(row.l) || 0,
+        t: parseInt(row.t) || 0,
+        s: parseInt(row.s) || 0,
+        p: parseInt(row.p) || 0,
+        credits: parseFloat(row.credits) || 0,
+        totalHours: (parseInt(row.l) || 0) + (parseInt(row.t) || 0) + (parseInt(row.s) || 0) + (parseInt(row.p) || 0),
+        courseType: row.courseType || 'CORE',
+        courseNature: row.courseNature || 'MANDATORY',
+        courseMode: row.courseMode || 'THEORY',
+        hasAttendance: row.hasAttendance === true || row.hasAttendance === 'true' || row.hasAttendance === 'Yes',
+        roomNo: row.roomNo || null
+      }))
+
+      await api.courses.createBulk(coursesToUpload)
+
+      alert(`Successfully uploaded ${coursesToUpload.length} courses!`)
+      setShowBulkModal(false)
+      setUploadFile(null)
+      setUploadPreview([])
+      fetchCourses()
+    } catch (error: any) {
+      console.error('Error uploading courses:', error)
+      alert(error.message || 'Failed to upload courses')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // Enhanced filtering
+  const filteredCourses = courses.filter(course => {
+    const matchesSearch = course.courseCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         course.courseName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         course.programmeName.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesSemester = !selectedSemester || course.semester.toString() === selectedSemester
+    
+    return matchesSearch && matchesSemester
+  })
+
+  // Get unique programme codes and semesters for filters
+  const availableProgrammeCodes = [...new Set(programmes.map(p => p.programmeCode))]
+  const availableSemesters = [...new Set(courses.map(c => c.semester))].sort((a, b) => a - b)
+
+  if (loading) {
+    return (
+      <div className="flex bg-gray-50 min-h-screen">
+        <Sidebar role="admin" />
+        <div className="flex-1 p-8">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-16 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-3 border-indigo-600 border-t-transparent mx-auto"></div>
+            <p className="mt-4 text-gray-600 font-medium">Loading courses...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="flex">
+    <div className="flex bg-gray-50 min-h-screen">
       <Sidebar role="admin" />
       
-      <div className="flex-1 p-6 bg-gray-50 min-h-screen">
+      <div className="flex-1 p-8">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Course Management</h1>
-            <p className="text-gray-600">Manage all courses across programmes and sessions</p>
+            <p className="text-gray-600">Manage academic courses and curriculum structure</p>
           </div>
           <div className="flex space-x-3">
             <button
-              onClick={() => setShowBulkUploadModal(true)}
-              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+              onClick={() => setShowAddModal(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-sm hover:shadow-md transition-all duration-200 flex items-center space-x-2"
             >
-              📁 Upload
+              <span className="text-lg">+</span>
+              <span>Add Course</span>
             </button>
             <button
-              onClick={() => setShowAddCourseModal(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              onClick={() => setShowBulkModal(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-sm hover:shadow-md transition-all duration-200 flex items-center space-x-2"
             >
-              ➕ Add Course
+              <span>ðŸ“</span>
+              <span>Bulk Upload</span>
             </button>
+          </div>
+        </div>
+
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <div className="flex items-center">
+              <div className="p-2 bg-indigo-100 rounded-lg">
+                <div className="w-6 h-6 bg-indigo-600 rounded"></div>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500">Total Courses</h3>
+                <span className="text-2xl font-bold text-gray-900">{courses.length}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <div className="flex items-center">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <div className="w-6 h-6 bg-blue-600 rounded"></div>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500">Theory</h3>
+                <span className="text-2xl font-bold text-gray-900">
+                  {courses.filter(c => c.courseMode === 'THEORY').length}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <div className="flex items-center">
+              <div className="p-2 bg-emerald-100 rounded-lg">
+                <div className="w-6 h-6 bg-emerald-600 rounded"></div>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500">Practical</h3>
+                <span className="text-2xl font-bold text-gray-900">
+                  {courses.filter(c => c.courseMode === 'PRACTICAL').length}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <div className="flex items-center">
+              <div className="p-2 bg-amber-100 rounded-lg">
+                <div className="w-6 h-6 bg-amber-600 rounded"></div>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500">Core Courses</h3>
+                <span className="text-2xl font-bold text-gray-900">
+                  {courses.filter(c => c.courseType === 'CORE').length}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <div className="flex items-center">
+              <div className="p-2 bg-violet-100 rounded-lg">
+                <div className="w-6 h-6 bg-violet-600 rounded"></div>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500">Total Credits</h3>
+                <span className="text-2xl font-bold text-gray-900">
+                  {courses.reduce((sum, c) => sum + c.credits, 0)}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Filters */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Filter Courses</h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Filter & Search Courses</h3>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Academic Session *
-              </label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Academic Session</label>
               <select
                 value={selectedSession}
                 onChange={(e) => setSelectedSession(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
               >
-                <option value="">Select Session...</option>
                 {sessions.map(session => (
                   <option key={session} value={session}>{session}</option>
                 ))}
@@ -199,45 +496,52 @@ export default function CourseManagementPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Programme *
-              </label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Programme</label>
               <select
-                value={selectedProgramme}
-                onChange={(e) => setSelectedProgramme(e.target.value)}
-                disabled={!selectedSession}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 disabled:bg-gray-100"
+                value={selectedProgrammeCode}
+                onChange={(e) => setSelectedProgrammeCode(e.target.value)}
+                className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
               >
-                <option value="">Select Programme...</option>
-                {programmes.map(programme => (
-                  <option key={programme.id} value={programme.id}>
-                    {programme.name}
-                  </option>
+                <option value="">All Programmes</option>
+                {availableProgrammeCodes.map(code => (
+                  <option key={code} value={code}>{code}</option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Search Courses
-              </label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Semester</label>
+              <select
+                value={selectedSemester}
+                onChange={(e) => setSelectedSemester(e.target.value)}
+                className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+              >
+                <option value="">All Semesters</option>
+                {availableSemesters.map(sem => (
+                  <option key={sem} value={sem.toString()}>Semester {sem}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Search Courses</label>
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search by name or code..."
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                placeholder="Course code, name, programme..."
+                className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
               />
             </div>
 
             <div className="flex items-end">
               <button
                 onClick={() => {
-                  setSelectedSession('')
-                  setSelectedProgramme('')
                   setSearchTerm('')
+                  setSelectedProgrammeCode('')
+                  setSelectedSemester('')
                 }}
-                className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
+                className="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2.5 rounded-lg font-medium transition-all"
               >
                 Clear All
               </button>
@@ -245,312 +549,391 @@ export default function CourseManagementPage() {
           </div>
         </div>
 
-        {/* Course Statistics */}
-        {selectedProgramme && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <h3 className="text-sm font-medium text-gray-600">Total Courses</h3>
-              <p className="text-3xl font-bold text-blue-600">{filteredCourses.length}</p>
-            </div>
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <h3 className="text-sm font-medium text-gray-600">Total Credits</h3>
-              <p className="text-3xl font-bold text-green-600">
-                {filteredCourses.reduce((sum, course) => sum + course.credits, 0)}
-              </p>
-            </div>
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <h3 className="text-sm font-medium text-gray-600">Assigned Faculty</h3>
-              <p className="text-3xl font-bold text-purple-600">
-                {filteredCourses.filter(course => course.facultyId).length}
-              </p>
-            </div>
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <h3 className="text-sm font-medium text-gray-600">Programme Duration</h3>
-              <p className="text-3xl font-bold text-orange-600">
-                {selectedProgrammeData?.duration || 0} Years
-              </p>
+        {/* Courses Table */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-purple-50">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Academic Courses</h2>
+                <p className="text-gray-600 mt-1">{selectedSession} Academic Session</p>
+              </div>
+              <div className="text-right">
+                <span className="text-lg font-bold text-gray-900">{filteredCourses.length}</span>
+                <p className="text-sm text-gray-600">courses</p>
+              </div>
             </div>
           </div>
-        )}
 
-        {/* Course Table */}
-        {selectedSession && selectedProgramme ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="p-4 bg-blue-600 text-white">
-              <h2 className="text-lg font-semibold">
-                Course Details - {selectedProgrammeData?.name} ({selectedSession})
-              </h2>
-            </div>
-
-            {filteredCourses.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">S.No</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Code</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Name</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Sem</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">L-T-P</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Credits</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Type</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Room</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Hours</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Students</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Faculty</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredCourses.map((course, index) => {
-                      const courseType = getCourseTypeDetails(course.type || 'core')
-                      
-                      return (
-                        <tr key={course.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm text-gray-900">{index + 1}</td>
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{course.code}</td>
-                          <td className="px-4 py-3">
-                            <div className="text-sm font-medium text-gray-900">{course.name}</div>
-                            <div className="text-xs text-gray-500">{course.programme}</div>
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm text-gray-900">{course.semester}</td>
-                          <td className="px-4 py-3 text-center text-sm text-gray-900">
-                            {course.lecture || 3}-{course.tutorial || 1}-{course.practical || 0}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm font-medium text-gray-900">{course.credits}</td>
-                          <td className="px-4 py-3 text-center">
-                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${courseType.color}`}>
-                              {courseType.label}
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Course Details</th>
+                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Programme</th>
+                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Sem</th>
+                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Hours (L-T-P-S)</th>
+                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Credits</th>
+                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Type</th>
+                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredCourses.map((course) => (
+                  <tr key={course.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div>
+                        <div className="text-sm font-semibold text-gray-900">{course.courseCode}</div>
+                        <div className="text-sm text-gray-600 mt-1">{course.courseName}</div>
+                        <div className="flex items-center mt-2 space-x-2">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            course.courseNature === 'MANDATORY' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            {course.courseNature}
+                          </span>
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            course.courseMode === 'THEORY' ? 'bg-indigo-100 text-indigo-800' :
+                            course.courseMode === 'PRACTICAL' ? 'bg-emerald-100 text-emerald-800' :
+                            'bg-violet-100 text-violet-800'
+                          }`}>
+                            {course.courseMode}
+                          </span>
+                          {course.roomNo && (
+                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                              {course.roomNo}
                             </span>
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm text-gray-900">{course.roomNo || 'TBA'}</td>
-                          <td className="px-4 py-3 text-center text-sm text-gray-900">{course.hours || 4}</td>
-                          <td className="px-4 py-3 text-center text-sm text-gray-900">{course.studentCount || 60}</td>
-                          <td className="px-4 py-3 text-sm text-gray-900">{getFacultyName(course.facultyId)}</td>
-                          <td className="px-4 py-3 text-center">
-                            <div className="flex justify-center space-x-2">
-                              <button className="text-blue-600 hover:text-blue-800 text-xs">Edit</button>
-                              <button className="text-red-600 hover:text-red-800 text-xs">Delete</button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="p-12 text-center">
-                <div className="text-gray-400 mb-4">
-                  <div className="text-6xl mb-4">📚</div>
-                  <h3 className="text-xl font-semibold text-gray-600">No Courses Found</h3>
-                  <p className="text-gray-500 mt-2">No courses available for the selected criteria</p>
-                </div>
-              </div>
-            )}
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="text-sm">
+                        <div className="font-semibold text-gray-900">{course.programmeCode}</div>
+                        <div className="text-xs text-gray-500 mt-1">{course.programmeName}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="inline-flex px-3 py-1 text-sm font-semibold rounded-full bg-indigo-100 text-indigo-800">
+                        {course.semester}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="text-sm font-mono">
+                        <div className="font-semibold text-gray-900">{course.l}-{course.t}-{course.p}-{course.s}</div>
+                        <div className="text-xs text-gray-500">Total: {course.totalHours}h</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="text-lg font-bold text-amber-600">{course.credits}</span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        course.courseType === 'CORE' ? 'bg-purple-100 text-purple-800' :
+                        course.courseType === 'OPEN_ELECTIVE' ? 'bg-blue-100 text-blue-800' :
+                        course.courseType === 'PROJECT' ? 'bg-emerald-100 text-emerald-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {course.courseType}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex justify-center space-x-2">
+                        <button className="text-indigo-600 hover:text-indigo-800 font-medium text-sm px-3 py-1 rounded-md hover:bg-indigo-50 transition-colors">
+                          Edit
+                        </button>
+                        <button className="text-red-600 hover:text-red-800 font-medium text-sm px-3 py-1 rounded-md hover:bg-red-50 transition-colors">
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filteredCourses.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                      <div className="text-4xl mb-4">ðŸ“š</div>
+                      <div className="text-lg font-semibold text-gray-600">No courses found</div>
+                      <p className="text-gray-500 mt-2">
+                        {courses.length === 0 
+                          ? 'No courses available for the selected session'
+                          : 'No courses match your search and filter criteria'
+                        }
+                      </p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-            <div className="text-gray-400 mb-4">
-              <div className="text-6xl mb-4">🎓</div>
-              <h3 className="text-xl font-semibold text-gray-600">Select Session & Programme</h3>
-              <p className="text-gray-500 mt-2">Please select both academic session and programme to view courses</p>
-            </div>
-          </div>
-        )}
+        </div>
 
         {/* Add Course Modal */}
-        {showAddCourseModal && (
+        {showAddModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-xl max-w-4xl w-full p-6 max-h-[95vh] overflow-y-auto shadow-2xl">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-gray-900">Add New Course</h2>
                 <button
-                  onClick={() => setShowAddCourseModal(false)}
-                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                  onClick={() => setShowAddModal(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
                 >
-                  ×
+                  Ã—
                 </button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Basic Information */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Basic Information</h3>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">Course Code *</label>
+                <div className="col-span-2 mb-4">
+                  <h3 className="text-lg font-bold text-gray-900 mb-3 border-b border-gray-200 pb-2">
+                    ðŸ“‹ Basic Information
+                  </h3>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Academic Session *</label>
+                  <select
+                    value={newCourse.session}
+                    onChange={(e) => setNewCourse(prev => ({ ...prev, session: e.target.value }))}
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                  >
+                    {sessions.map(session => (
+                      <option key={session} value={session}>{session}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Programme *</label>
+                  <select
+                    value={newCourse.programmeCode}
+                    onChange={(e) => {
+                      const selectedProgramme = programmes.find(p => p.programmeCode === e.target.value)
+                      setNewCourse(prev => ({ 
+                        ...prev, 
+                        programmeCode: e.target.value,
+                        programmeName: selectedProgramme?.programmeName || ''
+                      }))
+                    }}
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                  >
+                    <option value="">Select Programme</option>
+                    {availableProgrammeCodes.map(code => {
+                      const programme = programmes.find(p => p.programmeCode === code)
+                      return (
+                        <option key={code} value={code}>
+                          {code} - {programme?.programmeName}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Semester *</label>
+                  <select
+                    value={newCourse.semester}
+                    onChange={(e) => setNewCourse(prev => ({ ...prev, semester: parseInt(e.target.value) }))}
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                  >
+                    {[1,2,3,4,5,6,7,8].map(sem => (
+                      <option key={sem} value={sem}>Semester {sem}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Course Code *</label>
+                  <input
+                    type="text"
+                    value={newCourse.courseCode}
+                    onChange={(e) => setNewCourse(prev => ({ ...prev, courseCode: e.target.value }))}
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                    placeholder="e.g., ETCCCS101"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Course Name *</label>
+                  <input
+                    type="text"
+                    value={newCourse.courseName}
+                    onChange={(e) => setNewCourse(prev => ({ ...prev, courseName: e.target.value }))}
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                    placeholder="e.g., Mathematical Foundations for Computer Science"
+                  />
+                </div>
+
+                {/* Contact Hours */}
+                <div className="col-span-2 mt-4 mb-3">
+                  <h3 className="text-lg font-bold text-gray-900 mb-3 border-b border-gray-200 pb-2">
+                    â° Contact Hours
+                  </h3>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Lecture Hours (L)</label>
+                  <input
+                    type="number"
+                    value={newCourse.l}
+                    onChange={(e) => setNewCourse(prev => ({ ...prev, l: parseInt(e.target.value) || 0 }))}
+                    min="0"
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Tutorial Hours (T)</label>
+                  <input
+                    type="number"
+                    value={newCourse.t}
+                    onChange={(e) => setNewCourse(prev => ({ ...prev, t: parseInt(e.target.value) || 0 }))}
+                    min="0"
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Practical Hours (P)</label>
+                  <input
+                    type="number"
+                    value={newCourse.p}
+                    onChange={(e) => setNewCourse(prev => ({ ...prev, p: parseInt(e.target.value) || 0 }))}
+                    min="0"
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Self-Study Hours (S)</label>
+                  <input
+                    type="number"
+                    value={newCourse.s}
+                    onChange={(e) => setNewCourse(prev => ({ ...prev, s: parseInt(e.target.value) || 0 }))}
+                    min="0"
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Credits *</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={newCourse.credits}
+                    onChange={(e) => setNewCourse(prev => ({ ...prev, credits: parseFloat(e.target.value) || 0 }))}
+                    min="0"
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Total Hours</label>
+                  <input
+                    type="number"
+                    value={newCourse.l + newCourse.t + newCourse.p + newCourse.s}
+                    readOnly
+                    className="w-full bg-gray-100 border border-gray-300 rounded-lg px-4 py-2.5 text-gray-700 font-medium"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Auto-calculated from L+T+P+S</p>
+                </div>
+
+                {/* Course Classification */}
+                <div className="col-span-2 mt-4 mb-3">
+                  <h3 className="text-lg font-bold text-gray-900 mb-3 border-b border-gray-200 pb-2">
+                    ðŸ“Š Course Classification
+                  </h3>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Course Type</label>
+                  <select
+                    value={newCourse.courseType}
+                    onChange={(e) => setNewCourse(prev => ({ ...prev, courseType: e.target.value as CourseType }))}
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                  >
+                    {courseTypes.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Course Nature</label>
+                  <select
+                    value={newCourse.courseNature}
+                    onChange={(e) => setNewCourse(prev => ({ ...prev, courseNature: e.target.value as CourseNature }))}
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                  >
+                    {courseNatures.map(nature => (
+                      <option key={nature} value={nature}>{nature}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Course Mode</label>
+                  <select
+                    value={newCourse.courseMode}
+                    onChange={(e) => setNewCourse(prev => ({ ...prev, courseMode: e.target.value as CourseMode }))}
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                  >
+                    {courseModes.map(mode => (
+                      <option key={mode} value={mode}>{mode}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Room Number</label>
+                  <input
+                    type="text"
+                    value={newCourse.roomNo}
+                    onChange={(e) => setNewCourse(prev => ({ ...prev, roomNo: e.target.value }))}
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                    placeholder="e.g., Room-101 or Lab-A"
+                  />
+                </div>
+
+                {/* Additional Settings */}
+                <div className="col-span-2 mt-4">
+                  <div className="flex items-center">
                     <input
-                      type="text"
-                      value={newCourse.code || ''}
-                      onChange={(e) => setNewCourse(prev => ({ ...prev, code: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                      placeholder="e.g., CS301"
+                      type="checkbox"
+                      checked={newCourse.hasAttendance}
+                      onChange={(e) => setNewCourse(prev => ({ ...prev, hasAttendance: e.target.checked }))}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">Course Name *</label>
-                    <input
-                      type="text"
-                      value={newCourse.name || ''}
-                      onChange={(e) => setNewCourse(prev => ({ ...prev, name: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                      placeholder="e.g., Data Structures"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-800 mb-1">Semester *</label>
-                      <select
-                        value={newCourse.semester || 1}
-                        onChange={(e) => setNewCourse(prev => ({ ...prev, semester: Number(e.target.value) }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                      >
-                        {Array.from({length: 8}, (_, i) => i + 1).map(sem => (
-                          <option key={sem} value={sem}>Semester {sem}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-800 mb-1">Credits *</label>
-                      <input
-                        type="number"
-                        value={newCourse.credits || 3}
-                        onChange={(e) => setNewCourse(prev => ({ ...prev, credits: Number(e.target.value) }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                        min="1"
-                        max="10"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">Course Type *</label>
-                    <select
-                      value={newCourse.type || 'core'}
-                      onChange={(e) => setNewCourse(prev => ({ ...prev, type: e.target.value as any }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                    >
-                      {courseTypes.map(type => (
-                        <option key={type.value} value={type.value}>{type.label}</option>
-                      ))}
-                    </select>
+                    <label className="ml-2 text-sm font-medium text-gray-700">
+                      Attendance Required
+                    </label>
                   </div>
                 </div>
 
-                {/* Academic Structure */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Academic Structure</h3>
-                  
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-800 mb-1">Lecture Hours</label>
-                      <input
-                        type="number"
-                        value={newCourse.lecture || 3}
-                        onChange={(e) => setNewCourse(prev => ({ ...prev, lecture: Number(e.target.value) }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                        min="0"
-                        max="10"
-                      />
+                {/* Course Summary */}
+                <div className="col-span-2 mt-4">
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-indigo-900 mb-2">Course Summary</h4>
+                    <div className="text-sm text-indigo-800 space-y-1">
+                      <div><strong>Course:</strong> {newCourse.courseCode} - {newCourse.courseName || 'Course Name'}</div>
+                      <div><strong>Programme:</strong> {newCourse.programmeCode} - {newCourse.programmeName}</div>
+                      <div><strong>Semester:</strong> {newCourse.semester} | <strong>Credits:</strong> {newCourse.credits}</div>
+                      <div><strong>Hours:</strong> L:{newCourse.l} T:{newCourse.t} P:{newCourse.p} S:{newCourse.s} = {newCourse.l + newCourse.t + newCourse.p + newCourse.s} total</div>
+                      <div><strong>Type:</strong> {newCourse.courseType} | <strong>Nature:</strong> {newCourse.courseNature} | <strong>Mode:</strong> {newCourse.courseMode}</div>
                     </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-800 mb-1">Tutorial Hours</label>
-                      <input
-                        type="number"
-                        value={newCourse.tutorial || 1}
-                        onChange={(e) => setNewCourse(prev => ({ ...prev, tutorial: Number(e.target.value) }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                        min="0"
-                        max="10"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-800 mb-1">Practical Hours</label>
-                      <input
-                        type="number"
-                        value={newCourse.practical || 0}
-                        onChange={(e) => setNewCourse(prev => ({ ...prev, practical: Number(e.target.value) }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                        min="0"
-                        max="10"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-800 mb-1">Room Number</label>
-                      <input
-                        type="text"
-                        value={newCourse.roomNo || ''}
-                        onChange={(e) => setNewCourse(prev => ({ ...prev, roomNo: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                        placeholder="e.g., LH-101"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-800 mb-1">Total Hours/Week</label>
-                      <input
-                        type="number"
-                        value={newCourse.hours || 4}
-                        onChange={(e) => setNewCourse(prev => ({ ...prev, hours: Number(e.target.value) }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                        min="1"
-                        max="20"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">Number of Students</label>
-                    <input
-                      type="number"
-                      value={newCourse.studentCount || 60}
-                      onChange={(e) => setNewCourse(prev => ({ ...prev, studentCount: Number(e.target.value) }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                      min="1"
-                      max="200"
-                    />
                   </div>
                 </div>
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
-                <h4 className="font-medium text-blue-900 mb-2">Course Summary</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div className="text-blue-800">
-                    <span className="font-medium">L-T-P:</span> {newCourse.lecture || 3}-{newCourse.tutorial || 1}-{newCourse.practical || 0}
-                  </div>
-                  <div className="text-blue-800">
-                    <span className="font-medium">Credits:</span> {newCourse.credits || 3}
-                  </div>
-                  <div className="text-blue-800">
-                    <span className="font-medium">Total Hours:</span> {newCourse.hours || 4}/week
-                  </div>
-                  <div className="text-blue-800">
-                    <span className="font-medium">Capacity:</span> {newCourse.studentCount || 60} students
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex space-x-3 mt-8">
+              <div className="flex space-x-3 mt-6">
                 <button
                   onClick={handleAddCourse}
-                  disabled={!newCourse.code || !newCourse.name || !selectedProgramme}
-                  className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                  disabled={!newCourse.courseCode || !newCourse.courseName || !newCourse.programmeCode}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-4 rounded-lg font-semibold transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Add Course
                 </button>
                 <button
-                  onClick={() => setShowAddCourseModal(false)}
-                  className="flex-1 bg-gray-100 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-200 font-medium transition-colors"
+                  onClick={() => setShowAddModal(false)}
+                  className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 px-4 rounded-lg font-semibold transition-all"
                 >
                   Cancel
                 </button>
@@ -559,72 +942,104 @@ export default function CourseManagementPage() {
           </div>
         )}
 
-        {/* Bulk Upload Modal */}
-        {/* Bulk Upload Modal - Compact Version */}
-        {showBulkUploadModal && (
+        {/* Bulk Upload Modal - Similar to other pages but updated for course fields */}
+        {showBulkModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl max-w-md w-full p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-gray-900">Upload Courses</h2>
+            <div className="bg-white rounded-xl max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900">Bulk Upload Courses</h2>
                 <button
-                  onClick={() => setShowBulkUploadModal(false)}
-                  className="text-gray-400 hover:text-gray-600 text-xl"
+                  onClick={() => setShowBulkModal(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
                 >
-                  ×
+                  Ã—
                 </button>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-medium text-gray-900 mb-2 text-sm">Download Template</h3>
-                  <p className="text-xs text-gray-600 mb-3">
-                    Download the Excel template with required format.
-                  </p>
-                  <button className="bg-green-100 text-green-800 px-3 py-2 rounded-lg hover:bg-green-200 transition-colors text-sm font-medium">
-                    📥 Download Template
+              <div className="space-y-6">
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <h3 className="text-lg font-bold text-amber-900 mb-3">ðŸ“‹ Required Excel Columns</h3>
+                  <div className="grid grid-cols-2 gap-2 text-sm text-amber-800">
+                    <div>â€¢ <strong>session</strong> (e.g., 2024-2025)</div>
+                    <div>â€¢ <strong>programmeCode</strong> (e.g., BTECH_CSE)</div>
+                    <div>â€¢ <strong>programmeName</strong> (Full programme name)</div>
+                    <div>â€¢ <strong>semester</strong> (1-8)</div>
+                    <div>â€¢ <strong>courseCode</strong> (e.g., ETCCCS101)</div>
+                    <div>â€¢ <strong>courseName</strong> (Full course name)</div>
+                    <div>â€¢ <strong>l, t, p, s</strong> (Hours for each)</div>
+                    <div>â€¢ <strong>credits</strong> (Credit points)</div>
+                    <div>â€¢ <strong>courseType</strong> (CORE, ELECTIVE, etc.)</div>
+                    <div>â€¢ <strong>courseNature</strong> (MANDATORY/ELECTIVE)</div>
+                    <div>â€¢ <strong>courseMode</strong> (THEORY/PRACTICAL/BOTH)</div>
+                    <div>â€¢ <strong>hasAttendance, roomNo</strong> (Optional)</div>
+                  </div>
+                </div>
+
+                <div className="text-center">
+                  <button
+                    onClick={downloadTemplate}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-semibold shadow-sm hover:shadow-md transition-all duration-200 flex items-center space-x-2 mx-auto"
+                  >
+                    <span>ðŸ“¥</span>
+                    <span>Download Excel Template</span>
                   </button>
                 </div>
 
-                <div className="border-t pt-4">
-                  <h3 className="font-medium text-gray-900 mb-2 text-sm">Upload File</h3>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-                    <div className="text-gray-400 mb-3">
-                      <div className="text-3xl mb-2">📁</div>
-                      <p className="text-xs">Drag and drop Excel file here</p>
-                      <p className="text-xs text-gray-500 mt-1">or click to browse</p>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Select Excel File</label>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleFileUpload}
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                  />
+                </div>
+
+                {uploadPreview.length > 0 && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <h3 className="text-lg font-bold text-gray-800 mb-3">Preview (First 5 rows)</h3>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-gray-200">
+                          <tr>
+                            {Object.keys(uploadPreview[0]).map(key => (
+                              <th key={key} className="px-3 py-2 text-left font-semibold text-gray-700">{key}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {uploadPreview.map((row, index) => (
+                            <tr key={index} className="border-b border-gray-200">
+                              {Object.values(row).map((value, i) => (
+                                <td key={i} className="px-3 py-2 text-gray-600">{String(value)}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                    <button className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm">
-                      Choose File
-                    </button>
                   </div>
-                </div>
+                )}
 
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                  <h4 className="font-medium text-yellow-900 mb-1 text-sm">Required Columns:</h4>
-                  <div className="text-xs text-yellow-800 space-y-1">
-                    <p>• Course Code, Name, Semester, Credits</p>
-                    <p>• L-T-P Hours, Type, Room, Students</p>
-                  </div>
+                <div className="flex space-x-3">
+                  <button
+                    onClick={handleBulkUpload}
+                    disabled={!uploadFile || uploading}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-4 rounded-lg font-semibold transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {uploading ? 'Uploading...' : 'ðŸ“¤ Upload Courses'}
+                  </button>
+                  <button
+                    onClick={() => setShowBulkModal(false)}
+                    className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 px-4 rounded-lg font-semibold transition-all"
+                  >
+                    Cancel
+                  </button>
                 </div>
-              </div>
-
-              <div className="flex space-x-3 mt-5">
-                <button
-                  className="flex-1 bg-green-600 text-white py-2 px-3 rounded-lg hover:bg-green-700 font-medium transition-colors text-sm"
-                >
-                  Upload Courses
-                </button>
-                <button
-                  onClick={() => setShowBulkUploadModal(false)}
-                  className="flex-1 bg-gray-100 text-gray-700 py-2 px-3 rounded-lg hover:bg-gray-200 font-medium transition-colors text-sm"
-                >
-                  Cancel
-                </button>
               </div>
             </div>
           </div>
         )}
-
       </div>
     </div>
   )

@@ -9,11 +9,17 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@prisma/client": "^6.15.0",
-    "@supabase/supabase-js": "^2.57.4",
+    "@prisma/client": "^6.16.2",
+    "@supabase/supabase-js": "^2.58.0",
+    "@types/formidable": "^3.4.5",
+    "@types/multer": "^2.0.0",
+    "dotenv": "^17.2.2",
+    "formidable": "^3.5.4",
+    "multer": "^2.0.2",
     "next": "15.5.2",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -21,9 +27,10 @@
     "@types/node": "^20.19.12",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/xlsx": "^0.0.35",
     "eslint": "^9",
     "eslint-config-next": "15.5.2",
-    "prisma": "^6.16.1",
+    "prisma": "^6.16.2",
     "tailwindcss": "^4",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"

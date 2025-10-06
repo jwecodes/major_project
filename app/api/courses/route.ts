@@ -1,31 +1,47 @@
-// app/api/courses/route.ts
-import { prisma } from '@/lib/prisma'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { PrismaClient } from '@prisma/client'
 
-export async function GET(request: Request) {
+const prisma = new PrismaClient()
+
+export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const programmeId = searchParams.get('programmeId')
+    const session = searchParams.get('session')
+    const programmeCode = searchParams.get('programmeCode')
+
+    let whereClause: any = {}
     
+    if (session) {
+      whereClause.session = session
+    }
+    
+    if (programmeCode) {
+      whereClause.programmeCode = programmeCode
+    }
+
     const courses = await prisma.course.findMany({
-      where: programmeId ? { programmeId } : {},
+      where: whereClause,
       include: {
         programme: {
           select: {
-            name: true,
-            code: true
+            id: true,
+            programmeCode: true,
+            programmeName: true,
+            session: true
           }
         },
-        faculty: {
+        _count: {
           select: {
-            name: true,
-            employeeId: true
+            facultyCourses: true,
+            courseContent: true
           }
         }
       },
       orderBy: [
+        { session: 'desc' },
+        { programmeCode: 'asc' },
         { semester: 'asc' },
-        { code: 'asc' }
+        { courseName: 'asc' }
       ]
     })
 
@@ -33,31 +49,91 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('Error fetching courses:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch courses' },
+      { message: 'Failed to fetch courses' },
       { status: 500 }
     )
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const data = await request.json()
-    
+    const body = await request.json()
+    const {
+      session,
+      programmeCode,
+      programmeName,
+      semester,
+      courseCode,
+      courseName,
+      l,
+      t,
+      p,
+      s,
+      credits,
+      totalHours,
+      courseType,
+      roomNo,
+      hasAttendance,
+      courseNature,
+      courseMode
+    } = body
+
+    // Validate required fields
+    if (!session || !programmeCode || !semester || !courseCode || !courseName || !credits) {
+      return NextResponse.json(
+        { message: 'Missing required fields' },
+        { status: 400 }
+      )
+    }
+
+    // Check if course code already exists in the session
+    const existingCourse = await prisma.course.findFirst({
+      where: {
+        session,
+        courseCode
+      }
+    })
+
+    if (existingCourse) {
+      return NextResponse.json(
+        { message: 'Course code already exists for this session' },
+        { status: 400 }
+      )
+    }
+
+    // Verify programme exists
+    const programme = await prisma.programme.findFirst({
+      where: {
+        programmeCode
+      }
+    })
+
+    if (!programme) {
+      return NextResponse.json(
+        { message: 'Programme not found' },
+        { status: 400 }
+      )
+    }
+
     const course = await prisma.course.create({
       data: {
-        code: data.code,
-        name: data.name,
-        semester: data.semester,
-        credits: data.credits,
-        lecture: data.lecture,
-        tutorial: data.tutorial,
-        practical: data.practical,
-        type: data.type,
-        roomNo: data.roomNo,
-        hours: data.hours,
-        studentCount: data.studentCount,
-        programmeId: data.programmeId,
-        facultyId: data.facultyId
+        session,
+        programmeCode,
+        programmeName: programmeName || programme.programmeName,
+        semester: parseInt(semester),
+        courseCode,
+        courseName,
+        l: parseInt(l) || 0,
+        t: parseInt(t) || 0,
+        p: parseInt(p) || 0,
+        s: parseInt(s) || 0,
+        credits: parseFloat(credits),
+        totalHours: parseInt(totalHours) || (parseInt(l) || 0) + (parseInt(t) || 0) + (parseInt(p) || 0) + (parseInt(s) || 0),
+        courseType: courseType || 'CORE',
+        roomNo: roomNo || null,
+        hasAttendance: hasAttendance !== false,
+        courseNature: courseNature || 'MANDATORY',
+        courseMode: courseMode || 'THEORY'
       }
     })
 
@@ -65,7 +141,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error creating course:', error)
     return NextResponse.json(
-      { error: 'Failed to create course' },
+      { message: 'Failed to create course' },
       { status: 500 }
     )
   }

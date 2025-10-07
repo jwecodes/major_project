@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📚 AcadeX - Structured Smart Learning  
 
-## Getting Started
+## 📖 Problem Statement  
+SOET faces challenges in **standardizing, storing, and retrieving teaching materials** (PPTs, assignments, question banks, etc.). Currently, resources are scattered and lack structured management, making it difficult for students and faculty to access materials efficiently.  
 
-First, run the development server:
+This project aims to build a **centralized digital repository** with structured file management, access control, and search functionality.  
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+---
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🎯 Objectives  
+- ✅ Standardize and digitize teaching resources.  
+- ✅ Create a **centralized repository** with structured file organization (department-wise, subject-wise, semester-wise).  
+- ✅ Implement **version control** to maintain document history.  
+- ✅ Enable **role-based access control** (students, faculty, coordinators).  
+- ✅ Design a **responsive and searchable UI** for easy access.  
+- ✅ Use **metadata tagging** (subject, semester, topic) for better categorization.  
+- ✅ Provide **analytics** on content usage (downloads/views).  
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 💡 Proposed Solution  
+1. **Faculty Content Upload System** – Upload PPTs, syllabus, question papers, assignments, and solution keys.  
+2. **Versioned Document Repository** – Maintain version history with approval status.  
+3. **Access Control & Sharing** – Role-based visibility for students, faculty, and coordinators.  
+4. **Search & Filter Module** – Keyword/subject-based search with filtering.  
+5. **Review & Approval Workflow** – Coordinators validate uploads before publishing.  
+6. **Content Usage Analytics** – Track views/downloads to measure engagement.  
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 🛠️ Tech Stack  
+- **Frontend**: [Next.js](https://nextjs.org/) (React Framework)  
+- **Backend / Database**: [Supabase](https://supabase.io/) (Postgres + Auth + API)  
+- **File Storage**: [Amazon S3](https://aws.amazon.com/s3/) (teaching resources storage)  
+- **Authentication**: Supabase Auth (role-based access)  
+- **Deployment**: Vercel / AWS  
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 📂 Features Breakdown  
+- 📤 **Upload & Manage Files** (faculty uploads, version history maintained).  
+- 🔐 **Authentication & RBAC** (students, faculty, coordinators).  
+- 🔎 **Search & Filter** (subject, semester, keywords).  
+- 📝 **Approval Workflow** (department coordinator review system).  
+- 📊 **Analytics Dashboard** (downloads, views, most accessed content).  
+- 🎨 **Responsive UI** (accessible on desktop & mobile).  
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 👨‍💻 Contributors  
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+<a href="https://github.com/jwecodes">
+  <img src="https://avatars.githubusercontent.com/jwecodes" width="60px" alt="@jwecodes"/>
+</a>
+<a href="https://github.com/MATDOTCAT">
+  <img src="https://avatars.githubusercontent.com/MATDOTCAT" width="60px" alt="@MATDOTCAT"/>
+</a>  
+
+- [@jwecodes](https://github.com/jwecodes) - Bhoomika Jain ( Project Lead & Developer )
+- [@MATDOTCAT](https://github.com/MATDOTCAT) - Harsh Ninan Mathew ( Project Lead & Developer )

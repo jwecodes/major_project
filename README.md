@@ -1,4 +1,4 @@
-# 📚 AcadeX - Structured Smart Learning  
+# 📚 AcadeX - Structured Smart Learning
 
 ## 📖 Problem Statement  
 SOET faces challenges in **standardizing, storing, and retrieving teaching materials** (PPTs, assignments, question banks, etc.). Currently, resources are scattered and lack structured management, making it difficult for students and faculty to access materials efficiently.  

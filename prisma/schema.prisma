@@ -1,0 +1,307 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================
+// USER & ROLE MANAGEMENT (Role-Based Access)
+// ============================================
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  role      Role     @default(STUDENT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  faculty  Faculty?
+  student  Student?
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  FACULTY
+  STUDENT
+}
+
+// ============================================
+// PROGRAMME MANAGEMENT
+// ============================================
+
+model Programme {
+  id              String   @id @default(uuid())
+  session         String   // e.g., "2024-2025"
+  programmeCode   String   // e.g., "BTECH-CSE"
+  programmeName   String   // e.g., "B.Tech Computer Science"
+  duration        Int      // in years, e.g., 4
+  currentSemester Int      // current running semester
+  section         String?  // can be null (A, B, C, etc.)
+  noOfStudents    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relationships
+  courses  Course[]
+  students Student[]
+  faculty  Faculty[]  // ✅ ADD THIS
+
+  // Make combination of session, programmeCode, and section unique
+  @@unique([session, programmeCode, section])
+  @@map("programmes")
+}
+
+// Add this new model in schema.prisma
+
+model LessonPlan {
+  id            String   @id @default(uuid())
+  courseId      String
+  course        Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  facultyId     String
+  faculty       Faculty  @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  
+  // Lesson plan fields
+  title         String
+  lectureNumber Int?
+  datePlanned   DateTime
+  dateConducted DateTime?
+  topicsCovered String
+  description   String?
+  
+  // Status
+  status        String   @default("DRAFT") // DRAFT, SUBMITTED, APPROVED
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([courseId])
+  @@index([facultyId])
+  @@index([status])
+}
+
+// ============================================
+// COURSE MANAGEMENT
+// ============================================
+
+model Course {
+  id           String      @id @default(uuid())
+  session      String      // e.g., "2024-2025"
+  programmeId  String
+  semester     Int         // 1-8
+  courseCode   String
+  courseName   String
+  
+  // L-T-P-S Credits System
+  l            Int         @default(0) // Lecture hours
+  t            Int         @default(0) // Tutorial hours
+  p            Int         @default(0) // Practical hours
+  s            Int         @default(0) // Self-study hours
+  credits      Int         // Total credits
+  totalHours   Int         // Total contact hours per week
+  
+  // Course Details
+  courseType   CourseType  // ✅ CHANGED: Now academic type
+  deliveryMode DeliveryMode @default(THEORY) // ✅ NEW: Theory/Practical/Both
+  roomNo       String?
+  attendance   Boolean     @default(true)
+  category     CourseCategory // MANDATORY/ELECTIVE
+  
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  // Relationships
+  programme          Programme            @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  courseAllocations  CourseAllocation[]
+  teachingContents   TeachingContent[]
+  studentEnrollments StudentEnrollment[]
+  lessonPlans       LessonPlan[]     // Add this
+
+  @@unique([session, courseCode, programmeId])
+  @@map("courses")
+}
+
+// ✅ NEW: Academic Course Types
+enum CourseType {
+  CORE              // Core Course
+  SEC               // Skill Enhancement Course
+  INDUSTRY          // Industry Course
+  SKILL             // Skill Course
+  VAC               // Value Added Course
+  OPEN_ELECTIVE     // Open Elective
+  AEC               // Ability Enhancement Course
+  DSE               // Discipline Specific Elective
+  INTERNSHIP        // Internship
+  PROJECT           // Project
+  MOOC              // MOOC Course
+  CS                // Community Service
+  OTHER             // Other (define in description)
+}
+
+// ✅ NEW: Delivery Mode
+enum DeliveryMode {
+  THEORY            // Theory only
+  PRACTICAL         // Practical/Lab only
+  BOTH              // Both Theory and Practical
+}
+
+enum CourseCategory {
+  MANDATORY
+  ELECTIVE
+}
+
+
+// ============================================
+// FACULTY MANAGEMENT (UPDATED)
+// ============================================
+
+model Faculty {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  facultyId   String   @unique          // ✅ CHANGED: Now unique by itself (not with session)
+  name        String
+  designation String   // Professor, Assistant Professor, etc.
+  email       String   @unique
+  contactNo   String?  // ✅ CHANGED: Now optional
+  department  String?
+  programmeId String?  // ✅ NEW: Link to programme instead of session
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relationships
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programme          Programme?           @relation(fields: [programmeId], references: [id], onDelete: SetNull)
+  courseAllocations  CourseAllocation[]
+  teachingContents   TeachingContent[]
+  lessonPlans       LessonPlan[]     // Add this
+
+  @@map("faculty")
+}
+
+// ============================================
+// COURSE ALLOCATION (Faculty to Course Mapping)
+// ============================================
+
+model CourseAllocation {
+  id         String               @id @default(uuid())
+  courseId   String
+  facultyId  String
+  role       FacultyCourseRole    @default(CONTRIBUTOR)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+
+  // Relationships
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  faculty Faculty @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, facultyId])
+  @@map("course_allocations")
+}
+
+enum FacultyCourseRole {
+  COORDINATOR
+  CONTRIBUTOR
+}
+
+// ============================================
+// TEACHING CONTENT (File Metadata - points to Supabase Storage)
+// ============================================
+
+model TeachingContent {
+  id              String            @id @default(uuid())
+  courseId        String
+  facultyId       String
+  contentType     ContentType
+  title           String
+  description     String?
+  lectureNumber   Int?              // For lecture PPTs
+  
+  // Supabase Storage Info
+  filePath        String            // Path in Supabase Storage
+  fileName        String
+  fileSize        Int?              // in bytes
+  mimeType        String?
+  
+  // Approval Workflow
+  approvalStatus  ApprovalStatus    @default(PENDING)
+  coordinatorNotes String?
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  // Relationships
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  faculty Faculty @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+
+  @@map("teaching_contents")
+}
+
+enum ContentType {
+  COURSE_HANDOUT      // Course Handouts (CHO)
+  LECTURE_PPT         // Lecture PPTs
+  ASSIGNMENT          // Assignments
+  QUESTION_BANK       // Question Bank
+  QUESTION_PAPER      // Question Papers
+  LAB_MANUAL          // Lab Manual
+  REFERENCE_MATERIAL  // Reference Materials
+}
+
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  CHANGES_REQUIRED
+  REJECTED
+}
+
+// ============================================
+// STUDENT MANAGEMENT
+// ============================================
+
+model Student {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  studentId       String   @unique // Roll number
+  name            String
+  email           String   @unique
+  contactNo       String?
+  programmeId     String
+  currentSemester Int
+  section         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relationships
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programme   Programme           @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  enrollments StudentEnrollment[]
+
+  @@map("students")
+}
+
+// ============================================
+// STUDENT ENROLLMENTS (Student to Course Mapping)
+// ============================================
+
+model StudentEnrollment {
+  id         String   @id @default(uuid())
+  studentId  String
+  courseId   String
+  enrolledAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relationships
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, courseId])
+  @@map("student_enrollments")
+}

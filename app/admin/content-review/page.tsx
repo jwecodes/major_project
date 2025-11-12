@@ -1,354 +1,372 @@
 'use client'
-import { Sidebar } from '@/components/sidebar'
-import { courses, faculties, academicContent, contentTypes, approvalStatuses } from '@/lib/mokedata'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { FileText, CheckCircle, XCircle, AlertCircle, Download, Eye, X } from 'lucide-react'
+import toast, { Toaster } from 'react-hot-toast'
+import { getPendingContent, approveContent, requestChanges } from '@/app/actions/admin'
 
-interface AcademicContent {
+interface Content {
   id: string
   title: string
-  description: string
-  type: 'assignment' | 'ppt' | 'handbook' | 'question_paper' | 'notes' | 'video' | 'other'
-  courseId: string
-  facultyId: string
-  fileUrl: string
+  contentType: string
   fileName: string
-  fileSize: string
-  uploadedAt: string
-  isPublished: boolean
-  downloadCount: number
-  approvalStatus: 'pending' | 'approved' | 'rejected' | 'needs_revision'
-  reviewedBy?: string
-  reviewedAt?: string
-  reviewComments?: string
-  submittedAt: string
+  filePath: string
+  fileSize: number
+  description: string | null
+  lectureNumber: number | null
+  approvalStatus: string
+  createdAt: string
+  faculty: {
+    name: string
+    facultyId: string
+    designation: string
+  }
+  course: {
+    courseCode: string
+    courseName: string
+    programme: {
+      programmeCode: string
+      programmeName: string
+    }
+  }
 }
 
-export default function AdminContentReviewPage() {
-  const [statusFilter, setStatusFilter] = useState('pending')
-  const [showReviewModal, setShowReviewModal] = useState(false)
-  const [selectedContent, setSelectedContent] = useState<AcademicContent | null>(null)
-  const [reviewForm, setReviewForm] = useState({
-    status: 'approved' as 'approved' | 'rejected' | 'needs_revision',
-    comments: ''
-  })
+export default function ContentReviewPage() {
+  const [contents, setContents] = useState<Content[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showModal, setShowModal] = useState(false)
+  const [selectedContent, setSelectedContent] = useState<Content | null>(null)
+  const [modalAction, setModalAction] = useState<'approve' | 'reject' | null>(null)
+  const [notes, setNotes] = useState('')
+  const [processing, setProcessing] = useState(false)
 
-  // Get content for review
-  const getContentForReview = () => {
-    let content = academicContent
-    
-    if (statusFilter !== 'all') {
-      content = content.filter(item => item.approvalStatus === statusFilter)
-    }
-    
-    return content.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())
+  useEffect(() => {
+    loadContent()
+  }, [])
+
+  const loadContent = async () => {
+    setLoading(true)
+    const data = await getPendingContent()
+    setContents(data)
+    setLoading(false)
   }
 
-  // Get course and faculty names
-  const getCourseName = (courseId: string) => {
-    return courses.find(course => course.id === courseId)?.name || 'Unknown Course'
-  }
-
-  const getFacultyName = (facultyId: string) => {
-    return faculties.find(faculty => faculty.id === facultyId)?.name || 'Unknown Faculty'
-  }
-
-  const getContentTypeDetails = (type: string) => {
-    return contentTypes.find(ct => ct.value === type) || contentTypes[contentTypes.length - 1]
-  }
-
-  const getApprovalStatusDetails = (status: string) => {
-    return approvalStatuses.find(s => s.value === status) || approvalStatuses[0]
-  }
-
-  // Handle review
-  const handleReviewContent = (content: AcademicContent) => {
+  const handleApproveClick = (content: Content) => {
     setSelectedContent(content)
-    setReviewForm({
-      status: 'approved',
-      comments: ''
-    })
-    setShowReviewModal(true)
+    setModalAction('approve')
+    setNotes('')
+    setShowModal(true)
   }
 
-  // Submit review
-  const handleSubmitReview = () => {
+  const handleRejectClick = (content: Content) => {
+    setSelectedContent(content)
+    setModalAction('reject')
+    setNotes('')
+    setShowModal(true)
+  }
+
+  const handleSubmit = async () => {
     if (!selectedContent) return
-    
-    console.log('Admin review submitted:', {
-      contentId: selectedContent.id,
-      status: reviewForm.status,
-      comments: reviewForm.comments,
-      reviewedBy: 'admin1',
-      reviewedAt: new Date().toISOString().split('T')[0]
-    })
-    
-    setShowReviewModal(false)
-    setSelectedContent(null)
-    setReviewForm({ status: 'approved', comments: '' })
+
+    if (modalAction === 'reject' && !notes.trim()) {
+      toast.error('Please provide a reason for requesting changes')
+      return
+    }
+
+    setProcessing(true)
+
+    try {
+      const result = modalAction === 'approve'
+        ? await approveContent(selectedContent.id, notes || undefined)
+        : await requestChanges(selectedContent.id, notes)
+
+      if (result.success) {
+        toast.success(
+          modalAction === 'approve' 
+            ? 'Content approved successfully!' 
+            : 'Changes requested successfully!'
+        )
+        setShowModal(false)
+        setSelectedContent(null)
+        setNotes('')
+        loadContent()
+      } else {
+        toast.error(result.error || 'An error occurred')
+      }
+    } catch (error) {
+      toast.error('Failed to process request')
+    } finally {
+      setProcessing(false)
+    }
   }
 
-  const contentList = getContentForReview()
+  const getContentTypeColor = (type: string) => {
+    const colors: Record<string, string> = {
+      'LECTURE_PPT': 'bg-blue-100 text-blue-800',
+      'ASSIGNMENT': 'bg-green-100 text-green-800',
+      'QUESTION_BANK': 'bg-purple-100 text-purple-800',
+      'LAB_MANUAL': 'bg-orange-100 text-orange-800',
+      'SYLLABUS': 'bg-pink-100 text-pink-800',
+      'NOTES': 'bg-yellow-100 text-yellow-800',
+      'COURSE_HANDBOOK': 'bg-indigo-100 text-indigo-800',
+      'REFERENCE_MATERIAL': 'bg-gray-100 text-gray-800'
+    }
+    return colors[type] || 'bg-gray-100 text-gray-800'
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading content...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="flex">
-      <Sidebar role="admin" />
+    <div>
+      <Toaster position="top-right" />
       
-      <div className="flex-1 p-8 bg-gray-50">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Content Review</h1>
-          <div className="text-sm text-gray-600">
-            Review and approve faculty-submitted content
-          </div>
-        </div>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Content Review</h1>
+        <p className="text-gray-600">Review and approve teaching materials submitted by faculty</p>
+      </div>
 
-        {/* Review Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold text-gray-600">Pending Review</h3>
-            <p className="text-3xl font-bold text-yellow-600">
-              {academicContent.filter(c => c.approvalStatus === 'pending').length}
-            </p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold text-gray-600">Approved</h3>
-            <p className="text-3xl font-bold text-green-600">
-              {academicContent.filter(c => c.approvalStatus === 'approved').length}
-            </p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold text-gray-600">Needs Revision</h3>
-            <p className="text-3xl font-bold text-orange-600">
-              {academicContent.filter(c => c.approvalStatus === 'needs_revision').length}
-            </p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold text-gray-600">Rejected</h3>
-            <p className="text-3xl font-bold text-red-600">
-              {academicContent.filter(c => c.approvalStatus === 'rejected').length}
-            </p>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-          <div className="flex items-center space-x-4">
-            <label className="text-sm font-medium text-gray-800">Filter by Status:</label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-            >
-              <option value="all">All Status</option>
-              {approvalStatuses.map(status => (
-                <option key={status.value} value={status.value}>{status.label}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Content List */}
-        <div className="bg-white rounded-lg shadow-md">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Content for Review ({contentList.length})
-            </h2>
-          </div>
-
-          {contentList.length > 0 ? (
-            <div className="divide-y divide-gray-200">
-              {contentList.map((content) => {
-                const contentTypeDetails = getContentTypeDetails(content.type)
-                const approvalStatusDetails = getApprovalStatusDetails(content.approvalStatus)
-                
-                return (
-                  <div key={content.id} className="p-6 hover:bg-gray-50">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-2">
-                          <span className="text-2xl">{contentTypeDetails.icon}</span>
-                          <div>
-                            <h3 className="text-lg font-semibold text-gray-900">{content.title}</h3>
-                            <p className="text-sm text-gray-600">
-                              {getCourseName(content.courseId)} • {getFacultyName(content.facultyId)}
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <p className="text-gray-700 mb-3">{content.description}</p>
-                        
-                        <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${approvalStatusDetails.color}`}>
-                            {approvalStatusDetails.label}
-                          </span>
-                          <span>📁 {content.fileName}</span>
-                          <span>💾 {content.fileSize}</span>
-                          <span>📅 Submitted: {content.submittedAt}</span>
-                          {content.reviewedAt && (
-                            <span>✅ Reviewed: {content.reviewedAt}</span>
-                          )}
-                        </div>
-
-                        {content.reviewComments && (
-                          <div className="mt-3 p-3 bg-gray-50 rounded border-l-4 border-blue-400">
-                            <p className="text-sm text-gray-800">
-                              <span className="font-medium">Review Comments:</span> {content.reviewComments}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-center space-x-2 ml-4">
-                        <button className="text-blue-600 hover:text-blue-800 text-sm">
-                          Preview
-                        </button>
-                        <button className="text-green-600 hover:text-green-800 text-sm">
-                          Download
-                        </button>
-                        {content.approvalStatus === 'pending' && (
-                          <button
-                            onClick={() => handleReviewContent(content)}
-                            className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
-                          >
-                            Review
-                          </button>
-                        )}
-                        {content.approvalStatus !== 'pending' && (
-                          <button
-                            onClick={() => handleReviewContent(content)}
-                            className="text-orange-600 hover:text-orange-800 text-sm"
-                          >
-                            Re-review
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="p-12 text-center">
-              <div className="text-gray-400 mb-4">
-                <div className="text-6xl mb-4">📋</div>
-                <h3 className="text-xl font-semibold text-gray-600">No Content to Review</h3>
-                <p className="text-gray-500 mt-2">No content matches the selected filter</p>
+      {/* Review Modal */}
+      {showModal && selectedContent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {modalAction === 'approve' ? 'Approve Content' : 'Request Changes'}
+                  </h2>
+                  <p className="text-gray-600 mt-1">{selectedContent.title}</p>
+                </div>
+                <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-700">
+                  <X className="h-6 w-6" />
+                </button>
               </div>
             </div>
-          )}
-        </div>
 
-        {/* Review Modal */}
-        {/* Review Modal - Compact Version */}
-        {showReviewModal && selectedContent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg max-w-lg w-full p-5 max-h-[85vh] overflow-y-auto">
-            <h2 className="text-lg font-semibold mb-3 text-gray-900">Review Content</h2>
-            
-            <div className="space-y-3 mb-4">
-                <div>
-                <h3 className="font-medium text-gray-900 text-sm">{selectedContent.title}</h3>
-                <p className="text-xs text-gray-600">
-                    {getCourseName(selectedContent.courseId)} • {getFacultyName(selectedContent.facultyId)}
-                </p>
+            <div className="p-6">
+              {/* Content Details */}
+              <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                <h3 className="font-semibold text-gray-900 mb-3">Content Details</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-600">Faculty</p>
+                    <p className="font-medium text-gray-900">{selectedContent.faculty.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Designation</p>
+                    <p className="font-medium text-gray-900">{selectedContent.faculty.designation}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Course</p>
+                    <p className="font-medium text-gray-900">{selectedContent.course.courseCode}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Programme</p>
+                    <p className="font-medium text-gray-900">{selectedContent.course.programme.programmeCode}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Type</p>
+                    <span className={`px-2 py-1 rounded text-xs font-semibold ${getContentTypeColor(selectedContent.contentType)}`}>
+                      {selectedContent.contentType.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">File Size</p>
+                    <p className="font-medium text-gray-900">{(selectedContent.fileSize / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
                 </div>
+                {selectedContent.description && (
+                  <div className="mt-3">
+                    <p className="text-gray-600 text-sm">Description</p>
+                    <p className="text-gray-900 mt-1">{selectedContent.description}</p>
+                  </div>
+                )}
+              </div>
 
-                <div>
-                <span className="text-xs font-medium text-gray-700">Description:</span>
-                <p className="text-sm text-gray-800">{selectedContent.description}</p>
-                </div>
+              {/* Preview/Download */}
+              <div className="mb-4">
+                <a
+                  href={selectedContent.filePath}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-3 rounded-lg hover:bg-blue-100 font-medium"
+                >
+                  <Download className="h-5 w-5" />
+                  Download & Review File ({selectedContent.fileName})
+                </a>
+              </div>
 
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                <div>
-                    <span className="font-medium text-gray-700">Type:</span>
-                    <p className="text-gray-600">{getContentTypeDetails(selectedContent.type).label}</p>
-                </div>
-                <div>
-                    <span className="font-medium text-gray-700">File:</span>
-                    <p className="text-gray-600">{selectedContent.fileName}</p>
-                </div>
-                </div>
+              {/* Notes Input */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-800 mb-2">
+                  {modalAction === 'approve' ? 'Approval Notes (Optional)' : 'Changes Required (Required)'}
+                </label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder={
+                    modalAction === 'approve'
+                      ? 'Add any notes or feedback...'
+                      : 'Explain what changes are needed...'
+                  }
+                  rows={4}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                  required={modalAction === 'reject'}
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={handleSubmit}
+                  disabled={processing}
+                  className={`flex-1 px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 ${
+                    modalAction === 'approve'
+                      ? 'bg-green-600 hover:bg-green-700 text-white'
+                      : 'bg-orange-600 hover:bg-orange-700 text-white'
+                  } disabled:bg-gray-400`}
+                >
+                  {processing ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      {modalAction === 'approve' ? (
+                        <>
+                          <CheckCircle className="h-5 w-5" />
+                          Approve Content
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="h-5 w-5" />
+                          Request Changes
+                        </>
+                      )}
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-semibold"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
+          </div>
+        </div>
+      )}
 
-            <div className="border-t pt-3">
-                <h4 className="font-medium text-gray-900 mb-2 text-sm">Admin Review</h4>
-                
-                <div className="space-y-3">
-                <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-2">
-                    Review Decision *
-                    </label>
-                    <div className="space-y-1">
-                    <label className="flex items-center">
-                        <input
-                        type="radio"
-                        value="approved"
-                        checked={reviewForm.status === 'approved'}
-                        onChange={(e) => setReviewForm(prev => ({ ...prev, status: e.target.value as any }))}
-                        className="w-3 h-3 text-green-600 border-gray-300 focus:ring-green-500"
-                        />
-                        <span className="ml-2 text-sm text-gray-900">✅ Approve</span>
-                    </label>
-                    <label className="flex items-center">
-                        <input
-                        type="radio"
-                        value="needs_revision"
-                        checked={reviewForm.status === 'needs_revision'}
-                        onChange={(e) => setReviewForm(prev => ({ ...prev, status: e.target.value as any }))}
-                        className="w-3 h-3 text-orange-600 border-gray-300 focus:ring-orange-500"
-                        />
-                        <span className="ml-2 text-sm text-gray-900">🔄 Needs Revision</span>
-                    </label>
-                    <label className="flex items-center">
-                        <input
-                        type="radio"
-                        value="rejected"
-                        checked={reviewForm.status === 'rejected'}
-                        onChange={(e) => setReviewForm(prev => ({ ...prev, status: e.target.value as any }))}
-                        className="w-3 h-3 text-red-600 border-gray-300 focus:ring-red-500"
-                        />
-                        <span className="ml-2 text-sm text-gray-900">❌ Reject</span>
-                    </label>
+      {/* Stats Summary */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-gray-600">Pending Review</p>
+            <p className="text-4xl font-bold text-yellow-600">{contents.length}</p>
+          </div>
+          <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center">
+            <AlertCircle className="h-8 w-8 text-yellow-600" />
+          </div>
+        </div>
+      </div>
+
+      {/* Content List */}
+      <div className="bg-white rounded-lg shadow-md">
+        {contents.length === 0 ? (
+          <div className="p-12 text-center">
+            <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-700 mb-2">All Caught Up!</h3>
+            <p className="text-gray-600">No content pending review at the moment</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-200">
+            {contents.map((content) => (
+              <div key={content.id} className="p-6 hover:bg-gray-50 transition-colors">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="font-semibold text-gray-900 text-lg">{content.title}</h3>
+                      {content.lectureNumber && (
+                        <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
+                          Lecture {content.lectureNumber}
+                        </span>
+                      )}
+                      <span className={`px-2 py-1 rounded text-xs font-semibold ${getContentTypeColor(content.contentType)}`}>
+                        {content.contentType.replace(/_/g, ' ')}
+                      </span>
                     </div>
-                </div>
 
-                <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">
-                    Comments {reviewForm.status !== 'approved' && '*'}
-                    </label>
-                    <textarea
-                    value={reviewForm.comments}
-                    onChange={(e) => setReviewForm(prev => ({ ...prev, comments: e.target.value }))}
-                    rows={3}
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                    placeholder={reviewForm.status === 'approved' 
-                        ? 'Optional feedback...' 
-                        : 'Provide improvement feedback...'}
-                    />
-                </div>
-                </div>
-            </div>
+                    <div className="grid grid-cols-2 gap-4 mb-3">
+                      <div>
+                        <p className="text-sm text-gray-600">Submitted by</p>
+                        <p className="font-medium text-gray-900">{content.faculty.name}</p>
+                        <p className="text-xs text-gray-600">{content.faculty.facultyId} • {content.faculty.designation}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Course</p>
+                        <p className="font-medium text-gray-900">{content.course.courseCode} - {content.course.courseName}</p>
+                        <p className="text-xs text-gray-600">{content.course.programme.programmeCode}</p>
+                      </div>
+                    </div>
 
-            <div className="flex space-x-3 mt-4">
-                <button
-                onClick={handleSubmitReview}
-                disabled={reviewForm.status !== 'approved' && !reviewForm.comments.trim()}
-                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded text-sm hover:bg-blue-700 disabled:opacity-50"
-                >
-                Submit Review
-                </button>
-                <button
-                onClick={() => setShowReviewModal(false)}
-                className="flex-1 bg-gray-600 text-white py-2 px-4 rounded text-sm hover:bg-gray-700"
-                >
-                Cancel
-                </button>
-            </div>
-            </div>
-        </div>
+                    {content.description && (
+                      <p className="text-sm text-gray-700 mb-3 bg-gray-50 p-3 rounded">
+                        {content.description}
+                      </p>
+                    )}
+
+                    <div className="flex items-center gap-4 text-sm text-gray-600">
+                      <div className="flex items-center gap-1">
+                        <FileText className="h-4 w-4" />
+                        <span>{content.fileName}</span>
+                      </div>
+                      <span>•</span>
+                      <span>{(content.fileSize / 1024 / 1024).toFixed(2)} MB</span>
+                      <span>•</span>
+                      <span>{new Date(content.createdAt).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2 ml-4">
+                    <button
+                      onClick={() => handleApproveClick(content)}
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2 font-medium whitespace-nowrap"
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleRejectClick(content)}
+                      className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 flex items-center gap-2 font-medium whitespace-nowrap"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      Request Changes
+                    </button>
+                    <a
+                      href={content.filePath}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-blue-50 text-blue-700 px-4 py-2 rounded-lg hover:bg-blue-100 flex items-center gap-2 font-medium justify-center"
+                    >
+                      <Download className="h-4 w-4" />
+                      Preview
+                    </a>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
-
-
-
       </div>
     </div>
   )

@@ -19,7 +19,7 @@ export default function LandingPage() {
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                   TCMS Pro
                 </h1>
-                <p className="text-xs text-gray-600 font-medium">Teaching Content Management</p>
+                <p className="text-xs text-gray-600 font-medium">Teaching Content Management A</p>
               </div>
             </div>
             <nav className="hidden md:flex items-center gap-8">

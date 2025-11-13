@@ -78,11 +78,25 @@ export async function GET(
 ) {
   try {
     const facultyId = params.id
+    const courseIds = request.nextUrl.searchParams.get('courseIds')
 
     console.log('📄 Fetching content for faculty ID:', facultyId)
+    console.log('📚 Course IDs filter:', courseIds)
+
+    // Build the where clause
+    const whereClause: any = { facultyId }
+    
+    // If courseIds are provided, filter by them
+    if (courseIds) {
+      const courseIdArray = courseIds.split(',')
+      whereClause.courseId = {
+        in: courseIdArray
+      }
+      console.log('🔍 Filtering by course IDs:', courseIdArray)
+    }
 
     const content = await prisma.teachingContent.findMany({
-      where: { facultyId },
+      where: whereClause,
       include: {
         course: {
           select: {
@@ -105,13 +119,14 @@ export async function GET(
       return {
         id: item.id,
         title: item.title,
-        type: item.contentType,
+        contentType: item.contentType, // Changed from 'type' to match interface
         uploadDate: item.createdAt.toISOString(),
         status: item.approvalStatus,
         courseCode: item.course.courseCode,
         courseName: item.course.courseName,
         fileName: item.fileName,
         fileSize: item.fileSize,
+        filePath: item.filePath, // Add this for direct download
         fileUrl: data.publicUrl,
         lectureNumber: item.lectureNumber,
         description: item.description

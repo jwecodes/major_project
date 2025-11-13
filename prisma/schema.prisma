@@ -88,6 +88,60 @@ model LessonPlan {
 }
 
 // ============================================
+// COURSE HANDOUT (CHO) MANAGEMENT
+// ============================================
+
+model CourseHandout {
+  id        String   @id @default(uuid())
+  facultyId String
+  courseId  String
+  status    CHOStatus @default(DRAFT)
+  
+  // Basic Info (Fields 1-10)
+  schoolName      String
+  programme       String
+  courseTitle     String
+  courseCode      String
+  ltpStructure    String
+  credits         String
+  prerequisite    String
+  totalSessions   String
+  courseFaculty   String
+  facultyEmail    String
+  
+  // Course Content
+  coursePerspective       String   @db.Text
+  programOutcomes         Json     // Array of ProgramOutcome objects
+  programSpecificOutcomes Json     // Array of ProgramOutcome objects
+  courseOutcomes          Json     // Array of CourseOutcome objects
+  syllabus                Json     // Array of SyllabusUnit objects
+  assessmentStrategy      Json     // Array of AssessmentRow objects
+  correlationMatrix       Json     // Array of CorrelationRow objects
+  sessionPlan             Json     // Array of SessionPlan objects
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relationships
+  faculty   Faculty  @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  
+  @@unique([facultyId, courseId])
+  @@index([facultyId])
+  @@index([courseId])
+  @@index([status])
+  @@map("course_handouts")
+}
+
+enum CHOStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+
+// ============================================
 // COURSE MANAGEMENT
 // ============================================
 
@@ -123,6 +177,7 @@ model Course {
   teachingContents   TeachingContent[]
   studentEnrollments StudentEnrollment[]
   lessonPlans       LessonPlan[]     // Add this
+  courseHandouts     CourseHandout[]
 
   @@unique([session, courseCode, programmeId])
   @@map("courses")
@@ -181,6 +236,7 @@ model Faculty {
   courseAllocations  CourseAllocation[]
   teachingContents   TeachingContent[]
   lessonPlans       LessonPlan[]     // Add this
+  courseHandouts     CourseHandout[]
 
   @@map("faculty")
 }

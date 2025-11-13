@@ -165,23 +165,22 @@ import { BookOpen, Loader } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
 
-interface Course {
-  id: string
+interface Programme {
+  programmeName: string
+  section: string | null
+  semester: number
+}
+
+interface GroupedCourse {
   courseCode: string
   courseName: string
-  semester: number
-  programme: {
-    programmeName: string
-    section: string | null
-  }
-  allocation: {
-    role: 'COORDINATOR' | 'CONTRIBUTOR'
-  }
+  role: 'COORDINATOR' | 'CONTRIBUTOR'
+  programmes: Programme[]
 }
 
 export default function CoursesPage() {
   const router = useRouter()
-  const [courses, setCourses] = useState<Course[]>([])
+  const [courses, setCourses] = useState<GroupedCourse[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -199,7 +198,35 @@ export default function CoursesPage() {
       const data = await res.json()
 
       if (data.success && Array.isArray(data.courses)) {
-        setCourses(data.courses)
+        // Group courses by courseCode
+        const grouped: Record<string, GroupedCourse> = {}
+
+        data.courses.forEach((course: any) => {
+          const key = course.courseCode
+
+          if (!grouped[key]) {
+            grouped[key] = {
+              courseCode: course.courseCode,
+              courseName: course.courseName,
+              role: course.allocation.role,
+              programmes: []
+            }
+          }
+
+          // Add programme to the list
+          grouped[key].programmes.push({
+            programmeName: course.programme.programmeName,
+            section: course.programme.section,
+            semester: course.semester
+          })
+
+          // If any allocation is COORDINATOR, set the role as COORDINATOR
+          if (course.allocation.role === 'COORDINATOR') {
+            grouped[key].role = 'COORDINATOR'
+          }
+        })
+
+        setCourses(Object.values(grouped))
       } else {
         toast.error('Error loading courses')
       }
@@ -238,28 +265,39 @@ export default function CoursesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {courses.map(course => (
-            <div key={course.id} className="bg-white p-6 rounded-lg shadow border border-gray-200 hover:shadow-lg transition">
+            <div key={course.courseCode} className="bg-white p-6 rounded-lg shadow border border-gray-200 hover:shadow-lg transition">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-gray-900 mb-1">{course.courseName}</h3>
                   <p className="text-sm font-mono text-blue-600">{course.courseCode}</p>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-xs font-bold text-white whitespace-nowrap ml-2 ${
-                  course.allocation.role === 'COORDINATOR' ? 'bg-purple-600' : 'bg-blue-600'
+                  course.role === 'COORDINATOR' ? 'bg-purple-600' : 'bg-blue-600'
                 }`}>
-                  {course.allocation.role === 'COORDINATOR' ? '👑 Coordinator' : '👤 Contributor'}
+                  {course.role === 'COORDINATOR' ? '👑 Coordinator' : '👤 Contributor'}
                 </span>
               </div>
 
-              <div className="space-y-2 text-sm border-t pt-4">
-                <p><span className="font-medium text-gray-800">Programme:</span> {course.programme.programmeName}</p>
-                <p><span className="font-medium text-gray-800">Semester:</span> {course.semester}</p>
-                {course.programme.section && (
-                  <p><span className="font-medium text-gray-800">Section:</span> {course.programme.section}</p>
-                )}
+              <div className="border-t pt-4">
+                <p className="font-semibold text-gray-800 text-sm mb-3">
+                  📚 Programmes ({course.programmes.length}):
+                </p>
+                <div className="space-y-2">
+                  {course.programmes.map((prog, idx) => (
+                    <div key={idx} className="flex items-center gap-2 text-sm bg-gray-50 p-2 rounded border border-gray-200">
+                      <span className="flex-1 text-gray-900">
+                        {prog.programmeName}
+                        {prog.section && ` (Sec ${prog.section})`}
+                      </span>
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                        Sem {prog.semester}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              {course.allocation.role === 'COORDINATOR' && (
+              {course.role === 'COORDINATOR' && (
                 <div className="mt-4 p-3 bg-purple-50 border border-purple-200 rounded text-xs text-purple-700">
                   👑 You coordinate this course
                 </div>

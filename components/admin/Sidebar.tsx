@@ -8,6 +8,7 @@ import {
   Users, 
   Crown,
   FileCheck,
+  FileText,
   LogOut,
   UserCheck
 } from 'lucide-react'
@@ -22,7 +23,7 @@ export default function Sidebar() {
     { href: '/admin/faculty', icon: Users, label: 'Faculty' },
     { href: '/admin/students', icon: Users, label: 'Students' },
     { href: '/admin/course-coordination', icon: Crown, label: 'Course Coordination' },
-    { href: '/admin/content-review', icon: FileCheck, label: 'Content Review' },
+    { href: '/admin/course-handouts', icon: FileText, label: 'Course Handouts'},
   ]
 
   return (

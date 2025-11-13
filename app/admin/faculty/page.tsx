@@ -2032,9 +2032,1121 @@
 //   )
 // }
 
+// 'use client'
+// import { useState, useEffect } from 'react'
+// import { Plus, Edit, Trash2, Upload as UploadIcon, Search, Grid, List, BookOpen, Users, Award, X, Check, ChevronDown, Eye, FileText, File, Download, AlertCircle, CheckCircle, Clock, XCircle } from 'lucide-react'
+// import toast, { Toaster } from 'react-hot-toast'
+// import BulkUpload from '@/components/admin/BulkUpload'
+
+// interface Faculty {
+//   id: string
+//   facultyId: string
+//   name: string
+//   designation: string
+//   email: string
+//   contactNo: string | null
+//   department: string | null
+// }
+
+// interface Course {
+//   id: string
+//   courseCode: string
+//   courseName: string
+//   semester: number
+//   session: string
+//   programme: {
+//     id: string
+//     programmeCode: string
+//     programmeName: string
+//     section: string | null
+//   }
+// }
+
+// interface CourseAllocation {
+//   id: string
+//   facultyId: string
+//   courseId: string
+//   role: 'COORDINATOR' | 'CONTRIBUTOR'
+//   course: Course
+// }
+
+// interface ContentItem {
+//   id: string
+//   title: string
+//   type: string
+//   uploadDate: string
+//   status: 'PENDING' | 'APPROVED' | 'CHANGES_REQUIRED' | 'REJECTED'
+//   courseCode: string
+//   courseName: string
+//   fileName: string
+//   fileSize: number | null
+//   fileUrl: string
+//   lectureNumber?: number | null
+//   description?: string | null
+// }
+
+// interface LessonPlan {
+//   id: string
+//   title: string
+//   lectureNumber?: number | null
+//   datePlanned: string
+//   dateConducted?: string | null
+//   topicsCovered: string
+//   description?: string | null
+//   status: string
+//   courseCode: string
+//   courseName: string
+//   programmeName: string
+//   programmeCode: string
+//   section: string | null
+// }
+
+// export default function AdminFacultyPage() {
+//   const [faculty, setFaculty] = useState<Faculty[]>([])
+//   const [filteredFaculty, setFilteredFaculty] = useState<Faculty[]>([])
+//   const [loading, setLoading] = useState(true)
+//   const [searchTerm, setSearchTerm] = useState('')
+//   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  
+//   // Modals
+//   const [showAddModal, setShowAddModal] = useState(false)
+//   const [showEditModal, setShowEditModal] = useState(false)
+//   const [showBulkUpload, setShowBulkUpload] = useState(false)
+//   const [showCoursesModal, setShowCoursesModal] = useState(false)
+//   const [showContentModal, setShowContentModal] = useState(false)
+//   const [showFileViewer, setShowFileViewer] = useState(false)
+  
+//   // Selected data
+//   const [selectedFaculty, setSelectedFaculty] = useState<Faculty | null>(null)
+//   const [selectedFacultyCourses, setSelectedFacultyCourses] = useState<CourseAllocation[]>([])
+//   const [selectedFacultyContent, setSelectedFacultyContent] = useState<{
+//     faculty: Faculty | null
+//     content: ContentItem[]
+//     lessonPlans: LessonPlan[]
+//   }>({
+//     faculty: null,
+//     content: [],
+//     lessonPlans: []
+//   })
+//   const [viewingFileUrl, setViewingFileUrl] = useState('')
+  
+//   // Loading states
+//   const [loadingCourses, setLoadingCourses] = useState(false)
+//   const [loadingContent, setLoadingContent] = useState(false)
+  
+//   // Tab state
+//   const [activeContentTab, setActiveContentTab] = useState<'content' | 'lessons'>('content')
+  
+//   // Form data
+//   const [formData, setFormData] = useState({
+//     facultyId: '',
+//     name: '',
+//     designation: '',
+//     email: '',
+//     contactNo: '',
+//     department: ''
+//   })
+
+//   useEffect(() => {
+//     loadFaculty()
+//   }, [])
+
+//   useEffect(() => {
+//     filterFaculty()
+//   }, [faculty, searchTerm])
+
+//   const loadFaculty = async () => {
+//     try {
+//       setLoading(true)
+//       const res = await fetch('/api/admin/faculty')
+//       const data = await res.json()
+
+//       if (data.success) {
+//         setFaculty(data.faculty)
+//       } else {
+//         toast.error('Error loading faculty')
+//       }
+//     } catch (error) {
+//       toast.error('Error loading faculty')
+//     } finally {
+//       setLoading(false)
+//     }
+//   }
+
+//   const filterFaculty = () => {
+//     if (!searchTerm.trim()) {
+//       setFilteredFaculty(faculty)
+//       return
+//     }
+
+//     const search = searchTerm.toLowerCase()
+//     const filtered = faculty.filter(
+//       f =>
+//         f.name.toLowerCase().includes(search) ||
+//         f.facultyId.toLowerCase().includes(search) ||
+//         f.email.toLowerCase().includes(search) ||
+//         f.designation.toLowerCase().includes(search) ||
+//         (f.department && f.department.toLowerCase().includes(search))
+//     )
+//     setFilteredFaculty(filtered)
+//   }
+
+//   const handleSubmit = async (e: React.FormEvent) => {
+//     e.preventDefault()
+
+//     try {
+//       const url = selectedFaculty
+//         ? `/api/admin/faculty/${selectedFaculty.id}`
+//         : '/api/admin/faculty'
+      
+//       const method = selectedFaculty ? 'PUT' : 'POST'
+
+//       const res = await fetch(url, {
+//         method,
+//         headers: { 'Content-Type': 'application/json' },
+//         body: JSON.stringify(formData)
+//       })
+
+//       const data = await res.json()
+
+//       if (data.success) {
+//         toast.success(selectedFaculty ? 'Faculty updated!' : 'Faculty added!')
+//         loadFaculty()
+//         handleCloseModal()
+//       } else {
+//         toast.error(data.error || 'Error saving faculty')
+//       }
+//     } catch (error) {
+//       toast.error('Error saving faculty')
+//     }
+//   }
+
+//   const handleEdit = (facultyMember: Faculty) => {
+//     setSelectedFaculty(facultyMember)
+//     setFormData({
+//       facultyId: facultyMember.facultyId,
+//       name: facultyMember.name,
+//       designation: facultyMember.designation,
+//       email: facultyMember.email,
+//       contactNo: facultyMember.contactNo || '',
+//       department: facultyMember.department || ''
+//     })
+//     setShowEditModal(true)
+//   }
+
+//   const handleDelete = async (id: string) => {
+//     if (!confirm('Delete this faculty member? This will also remove all course allocations.')) return
+
+//     try {
+//       const res = await fetch(`/api/admin/faculty/${id}`, { method: 'DELETE' })
+//       const data = await res.json()
+
+//       if (data.success) {
+//         toast.success('Faculty deleted!')
+//         loadFaculty()
+//       } else {
+//         toast.error(data.error || 'Error deleting faculty')
+//       }
+//     } catch (error) {
+//       toast.error('Error deleting faculty')
+//     }
+//   }
+
+//   const handleCloseModal = () => {
+//     setShowAddModal(false)
+//     setShowEditModal(false)
+//     setSelectedFaculty(null)
+//     setFormData({
+//       facultyId: '',
+//       name: '',
+//       designation: '',
+//       email: '',
+//       contactNo: '',
+//       department: ''
+//     })
+//   }
+
+//   const loadFacultyCourses = async (facultyMember: Faculty) => {
+//     setLoadingCourses(true)
+//     setShowCoursesModal(true)
+//     setSelectedFaculty(facultyMember)
+//     setSelectedFacultyCourses([])
+    
+//     try {
+//       const res = await fetch(`/api/admin/faculty/${facultyMember.id}/courses`)
+//       const data = await res.json()
+      
+//       if (data.success) {
+//         setSelectedFacultyCourses(data.allocations)
+//       } else {
+//         toast.error('Error loading courses')
+//       }
+//     } catch (error) {
+//       toast.error('Error loading courses')
+//     } finally {
+//       setLoadingCourses(false)
+//     }
+//   }
+
+//   const loadFacultyContent = async (facultyMember: Faculty) => {
+//     setLoadingContent(true)
+//     setShowContentModal(true)
+//     setActiveContentTab('content')
+//     setSelectedFacultyContent({
+//       faculty: facultyMember,
+//       content: [],
+//       lessonPlans: []
+//     })
+    
+//     try {
+//       const [contentRes, lessonPlansRes] = await Promise.all([
+//         fetch(`/api/admin/faculty/${facultyMember.id}/content`),
+//         fetch(`/api/admin/faculty/${facultyMember.id}/lesson-plans`)
+//       ])
+      
+//       const contentData = await contentRes.json()
+//       const lessonPlansData = await lessonPlansRes.json()
+      
+//       setSelectedFacultyContent({
+//         faculty: facultyMember,
+//         content: contentData.success ? contentData.content : [],
+//         lessonPlans: lessonPlansData.success ? lessonPlansData.lessonPlans : []
+//       })
+      
+//       if (!contentData.success || !lessonPlansData.success) {
+//         toast.error('Error loading some data')
+//       }
+//     } catch (error) {
+//       console.error('Error:', error)
+//       toast.error('Error loading data')
+//     } finally {
+//       setLoadingContent(false)
+//     }
+//   }
+
+//   const handleViewFile = (fileUrl: string) => {
+//     setViewingFileUrl(fileUrl)
+//     setShowFileViewer(true)
+//   }
+
+//   const formatFileSize = (bytes: number | null): string => {
+//     if (!bytes) return 'Unknown'
+//     if (bytes < 1024) return bytes + ' B'
+//     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB'
+//     return (bytes / (1024 * 1024)).toFixed(2) + ' MB'
+//   }
+
+//   const getStatusBadge = (status: string) => {
+//     switch (status) {
+//       case 'APPROVED':
+//         return (
+//           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+//             <CheckCircle className="h-3 w-3" />
+//             Approved
+//           </span>
+//         )
+//       case 'PENDING':
+//         return (
+//           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
+//             <Clock className="h-3 w-3" />
+//             Pending
+//           </span>
+//         )
+//       case 'CHANGES_REQUIRED':
+//         return (
+//           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+//             <AlertCircle className="h-3 w-3" />
+//             Changes Required
+//           </span>
+//         )
+//       case 'REJECTED':
+//         return (
+//           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+//             <XCircle className="h-3 w-3" />
+//             Rejected
+//           </span>
+//         )
+//       default:
+//         return null
+//     }
+//   }
+
+//   const getContentIcon = (type: string) => {
+//     switch (type.toUpperCase()) {
+//       case 'COURSE_HANDOUT':
+//         return '📘'
+//       case 'LECTURE_PPT':
+//         return '📊'
+//       case 'ASSIGNMENT':
+//         return '📝'
+//       case 'QUESTION_BANK':
+//         return '❓'
+//       case 'QUESTION_PAPER':
+//         return '📄'
+//       case 'LAB_MANUAL':
+//         return '🔬'
+//       case 'REFERENCE_MATERIAL':
+//         return '📚'
+//       default:
+//         return '📄'
+//     }
+//   }
+
+//   const getContentGroupedByCourse = (content: ContentItem[]) => {
+//     const grouped = content.reduce((acc, item) => {
+//       const key = `${item.courseCode} - ${item.courseName}`
+//       if (!acc[key]) acc[key] = []
+//       acc[key].push(item)
+//       return acc
+//     }, {} as Record<string, ContentItem[]>)
+
+//     return Object.entries(grouped)
+//   }
+
+//   const groupContentByType = (content: ContentItem[]) => {
+//     const grouped = content.reduce((acc, item) => {
+//       const displayType = item.type.replace(/_/g, ' ')
+//       if (!acc[displayType]) acc[displayType] = []
+//       acc[displayType].push(item)
+//       return acc
+//     }, {} as Record<string, ContentItem[]>)
+
+//     return grouped
+//   }
+
+//   if (loading) {
+//     return (
+//       <div className="flex items-center justify-center min-h-screen">
+//         <div className="text-center">
+//           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+//           <p className="text-gray-600">Loading faculty...</p>
+//         </div>
+//       </div>
+//     )
+//   }
+
+//   return (
+//     <div className="p-6">
+//       <Toaster position="top-right" />
+
+//       {/* Header */}
+//       <div className="flex justify-between items-center mb-6">
+//         <div>
+//           <h1 className="text-3xl font-bold text-gray-900">Faculty Management</h1>
+//           <p className="text-gray-600">Manage faculty members and their courses</p>
+//         </div>
+//         <div className="flex gap-3">
+//           <button
+//             onClick={() => setShowBulkUpload(true)}
+//             className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2 font-medium transition-colors"
+//           >
+//             <UploadIcon className="h-5 w-5" />
+//             Bulk Upload
+//           </button>
+//           <button
+//             onClick={() => setShowAddModal(true)}
+//             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium transition-colors"
+//           >
+//             <Plus className="h-5 w-5" />
+//             Add Faculty
+//           </button>
+//         </div>
+//       </div>
+
+//       {/* Search and View Toggle */}
+//       <div className="bg-white p-4 rounded-lg shadow mb-6 flex justify-between items-center">
+//         <div className="flex-1 max-w-md">
+//           <div className="relative">
+//             <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+//             <input
+//               type="text"
+//               value={searchTerm}
+//               onChange={(e) => setSearchTerm(e.target.value)}
+//               placeholder="Search by name, ID, email, designation..."
+//               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+//             />
+//           </div>
+//         </div>
+
+//         <div className="flex gap-2">
+//           <button
+//             onClick={() => setViewMode('grid')}
+//             className={`p-2 rounded ${viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100'}`}
+//           >
+//             <Grid className="h-5 w-5" />
+//           </button>
+//           <button
+//             onClick={() => setViewMode('list')}
+//             className={`p-2 rounded ${viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100'}`}
+//           >
+//             <List className="h-5 w-5" />
+//           </button>
+//         </div>
+//       </div>
+
+//       {/* Faculty Count */}
+//       <div className="mb-4">
+//         <p className="text-gray-600">
+//           Showing <span className="font-semibold text-gray-900">{filteredFaculty.length}</span> of{' '}
+//           <span className="font-semibold text-gray-900">{faculty.length}</span> faculty members
+//         </p>
+//       </div>
+
+//       {/* Faculty List */}
+//       {filteredFaculty.length === 0 ? (
+//         <div className="bg-white p-12 rounded-lg shadow text-center">
+//           <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+//           <p className="text-gray-600 text-lg font-medium">No faculty found</p>
+//           <p className="text-gray-500 text-sm mt-2">
+//             {searchTerm ? 'Try adjusting your search' : 'Add your first faculty member'}
+//           </p>
+//         </div>
+//       ) : viewMode === 'grid' ? (
+//         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+//           {filteredFaculty.map((facultyMember) => (
+//             <div
+//               key={facultyMember.id}
+//               className="bg-white rounded-lg shadow border border-gray-200 hover:shadow-lg transition-shadow"
+//             >
+//               <div className="p-6">
+//                 <div className="flex items-start justify-between mb-4">
+//                   <div className="flex items-center gap-3">
+//                     <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+//                       <Users className="h-6 w-6 text-blue-600" />
+//                     </div>
+//                     <div>
+//                       <h3 className="font-semibold text-gray-900 text-lg">{facultyMember.name}</h3>
+//                       <p className="text-sm text-gray-600">{facultyMember.facultyId}</p>
+//                     </div>
+//                   </div>
+//                 </div>
+
+//                 <div className="space-y-2 text-sm mb-4">
+//                   <p>
+//                     <span className="font-medium text-gray-700">Designation:</span>{' '}
+//                     <span className="text-gray-600">{facultyMember.designation}</span>
+//                   </p>
+//                   <p>
+//                     <span className="font-medium text-gray-700">Email:</span>{' '}
+//                     <span className="text-gray-600">{facultyMember.email}</span>
+//                   </p>
+//                   {facultyMember.contactNo && (
+//                     <p>
+//                       <span className="font-medium text-gray-700">Contact:</span>{' '}
+//                       <span className="text-gray-600">{facultyMember.contactNo}</span>
+//                     </p>
+//                   )}
+//                   {facultyMember.department && (
+//                     <p>
+//                       <span className="font-medium text-gray-700">Department:</span>{' '}
+//                       <span className="text-gray-600">{facultyMember.department}</span>
+//                     </p>
+//                   )}
+//                 </div>
+
+//                 <div className="flex flex-wrap gap-2">
+//                   <button
+//                     onClick={() => loadFacultyCourses(facultyMember)}
+//                     className="flex-1 bg-indigo-100 text-indigo-700 px-3 py-2 rounded text-sm font-medium hover:bg-indigo-200 transition-colors flex items-center justify-center gap-1"
+//                   >
+//                     <BookOpen className="h-4 w-4" />
+//                     Courses
+//                   </button>
+//                   <button
+//                     onClick={() => loadFacultyContent(facultyMember)}
+//                     className="flex-1 bg-purple-100 text-purple-700 px-3 py-2 rounded text-sm font-medium hover:bg-purple-200 transition-colors flex items-center justify-center gap-1"
+//                   >
+//                     <FileText className="h-4 w-4" />
+//                     Content
+//                   </button>
+//                   <button
+//                     onClick={() => handleEdit(facultyMember)}
+//                     className="p-2 text-blue-700 hover:bg-blue-50 rounded transition-colors"
+//                   >
+//                     <Edit className="h-5 w-5" />
+//                   </button>
+//                   <button
+//                     onClick={() => handleDelete(facultyMember.id)}
+//                     className="p-2 text-red-700 hover:bg-red-50 rounded transition-colors"
+//                   >
+//                     <Trash2 className="h-5 w-5" />
+//                   </button>
+//                 </div>
+//               </div>
+//             </div>
+//           ))}
+//         </div>
+//       ) : (
+//         <div className="bg-white rounded-lg shadow overflow-hidden">
+//           <table className="min-w-full divide-y divide-gray-200">
+//             <thead className="bg-gray-50">
+//               <tr>
+//                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+//                   Faculty
+//                 </th>
+//                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+//                   Designation
+//                 </th>
+//                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+//                   Contact
+//                 </th>
+//                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+//                   Department
+//                 </th>
+//                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+//                   Actions
+//                 </th>
+//               </tr>
+//             </thead>
+//             <tbody className="bg-white divide-y divide-gray-200">
+//               {filteredFaculty.map((facultyMember) => (
+//                 <tr key={facultyMember.id} className="hover:bg-gray-50">
+//                   <td className="px-6 py-4 whitespace-nowrap">
+//                     <div>
+//                       <div className="font-medium text-gray-900">{facultyMember.name}</div>
+//                       <div className="text-sm text-gray-500">{facultyMember.facultyId}</div>
+//                       <div className="text-sm text-gray-500">{facultyMember.email}</div>
+//                     </div>
+//                   </td>
+//                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+//                     {facultyMember.designation}
+//                   </td>
+//                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+//                     {facultyMember.contactNo || '-'}
+//                   </td>
+//                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+//                     {facultyMember.department || '-'}
+//                   </td>
+//                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+//                     <div className="flex justify-end gap-2">
+//                       <button
+//                         onClick={() => loadFacultyCourses(facultyMember)}
+//                         className="text-indigo-600 hover:text-indigo-900"
+//                         title="View Courses"
+//                       >
+//                         <BookOpen className="h-5 w-5" />
+//                       </button>
+//                       <button
+//                         onClick={() => loadFacultyContent(facultyMember)}
+//                         className="text-purple-600 hover:text-purple-900"
+//                         title="View Content"
+//                       >
+//                         <FileText className="h-5 w-5" />
+//                       </button>
+//                       <button
+//                         onClick={() => handleEdit(facultyMember)}
+//                         className="text-blue-600 hover:text-blue-900"
+//                         title="Edit"
+//                       >
+//                         <Edit className="h-5 w-5" />
+//                       </button>
+//                       <button
+//                         onClick={() => handleDelete(facultyMember.id)}
+//                         className="text-red-600 hover:text-red-900"
+//                         title="Delete"
+//                       >
+//                         <Trash2 className="h-5 w-5" />
+//                       </button>
+//                     </div>
+//                   </td>
+//                 </tr>
+//               ))}
+//             </tbody>
+//           </table>
+//         </div>
+//       )}
+
+//       {/* ADD/EDIT MODAL */}
+//       {(showAddModal || showEditModal) && (
+//         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+//           <div className="bg-white rounded-lg shadow-2xl w-full max-w-md">
+//             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-t-lg">
+//               <h2 className="text-2xl font-bold">
+//                 {selectedFaculty ? 'Edit Faculty' : 'Add New Faculty'}
+//               </h2>
+//             </div>
+
+//             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+//               <div>
+//                 <label className="block text-sm font-medium text-gray-700 mb-2">Faculty ID *</label>
+//                 <input
+//                   type="text"
+//                   value={formData.facultyId}
+//                   onChange={(e) => setFormData({ ...formData, facultyId: e.target.value })}
+//                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+//                   required
+//                   disabled={!!selectedFaculty}
+//                 />
+//               </div>
+
+//               <div>
+//                 <label className="block text-sm font-medium text-gray-700 mb-2">Name *</label>
+//                 <input
+//                   type="text"
+//                   value={formData.name}
+//                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+//                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+//                   required
+//                 />
+//               </div>
+
+//               <div>
+//                 <label className="block text-sm font-medium text-gray-700 mb-2">Designation *</label>
+//                 <input
+//                   type="text"
+//                   value={formData.designation}
+//                   onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
+//                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+//                   required
+//                 />
+//               </div>
+
+//               <div>
+//                 <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+//                 <input
+//                   type="email"
+//                   value={formData.email}
+//                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+//                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+//                   required
+//                 />
+//               </div>
+
+//               <div>
+//                 <label className="block text-sm font-medium text-gray-700 mb-2">Contact Number</label>
+//                 <input
+//                   type="tel"
+//                   value={formData.contactNo}
+//                   onChange={(e) => setFormData({ ...formData, contactNo: e.target.value })}
+//                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+//                 />
+//               </div>
+
+//               <div>
+//                 <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
+//                 <input
+//                   type="text"
+//                   value={formData.department}
+//                   onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+//                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+//                 />
+//               </div>
+
+//               <div className="flex gap-3 pt-4">
+//                 <button
+//                   type="submit"
+//                   className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium"
+//                 >
+//                   {selectedFaculty ? 'Update' : 'Add Faculty'}
+//                 </button>
+//                 <button
+//                   type="button"
+//                   onClick={handleCloseModal}
+//                   className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400 font-medium"
+//                 >
+//                   Cancel
+//                 </button>
+//               </div>
+//             </form>
+//           </div>
+//         </div>
+//       )}
+
+//       {/* BULK UPLOAD MODAL */}
+//       {showBulkUpload && (
+//         <BulkUpload
+//           onClose={() => setShowBulkUpload(false)}
+//           onSuccess={() => {
+//             setShowBulkUpload(false)
+//             loadFaculty()
+//           }}
+//         />
+//       )}
+
+//       {/* COURSES MODAL */}
+//       {showCoursesModal && selectedFaculty && (
+//         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+//           <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+//             <div className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white p-6">
+//               <div className="flex justify-between items-start">
+//                 <div>
+//                   <h2 className="text-2xl font-bold">{selectedFaculty.name}</h2>
+//                   <p className="text-blue-100 text-sm mt-1">Course Allocations</p>
+//                 </div>
+//                 <button
+//                   onClick={() => setShowCoursesModal(false)}
+//                   className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+//                 >
+//                   <X className="h-6 w-6" />
+//                 </button>
+//               </div>
+//             </div>
+
+//             <div className="flex-1 overflow-y-auto p-6">
+//               {loadingCourses ? (
+//                 <div className="flex items-center justify-center py-12">
+//                   <div className="text-center">
+//                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+//                     <p className="text-gray-600">Loading courses...</p>
+//                   </div>
+//                 </div>
+//               ) : selectedFacultyCourses.length === 0 ? (
+//                 <div className="text-center py-12">
+//                   <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+//                   <p className="text-gray-600 text-lg font-medium">No courses assigned</p>
+//                 </div>
+//               ) : (
+//                 <div className="space-y-3">
+//                   {selectedFacultyCourses.map((allocation) => (
+//                     <div
+//                       key={allocation.id}
+//                       className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+//                     >
+//                       <div className="flex items-start justify-between">
+//                         <div className="flex-1">
+//                           <div className="flex items-center gap-2 mb-2">
+//                             <h3 className="font-semibold text-gray-900">
+//                               {allocation.course.courseName}
+//                             </h3>
+//                             <span
+//                               className={`px-3 py-1 rounded-full text-xs font-bold text-white ${
+//                                 allocation.role === 'COORDINATOR' ? 'bg-purple-600' : 'bg-blue-600'
+//                               }`}
+//                             >
+//                               {allocation.role === 'COORDINATOR' ? '👑 Coordinator' : '👤 Contributor'}
+//                             </span>
+//                           </div>
+//                           <p className="text-sm text-gray-600 mb-2">
+//                             <span className="font-medium">Code:</span> {allocation.course.courseCode}
+//                           </p>
+//                           <div className="text-sm text-gray-600 space-y-1">
+//                             <p>
+//                               <span className="font-medium">Programme:</span>{' '}
+//                               {allocation.course.programme.programmeName}
+//                               {allocation.course.programme.section && ` - Section ${allocation.course.programme.section}`}
+//                             </p>
+//                             <p>
+//                               <span className="font-medium">Semester:</span> {allocation.course.semester}
+//                             </p>
+//                             <p>
+//                               <span className="font-medium">Session:</span> {allocation.course.session}
+//                             </p>
+//                           </div>
+//                         </div>
+//                       </div>
+//                     </div>
+//                   ))}
+//                 </div>
+//               )}
+//             </div>
+
+//             <div className="bg-gray-50 px-6 py-4 border-t flex justify-end">
+//               <button
+//                 onClick={() => setShowCoursesModal(false)}
+//                 className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
+//               >
+//                 Close
+//               </button>
+//             </div>
+//           </div>
+//         </div>
+//       )}
+
+//       {/* CONTENT & LESSON PLANS VIEWER MODAL */}
+//       {showContentModal && selectedFacultyContent.faculty && (
+//         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+//           <div className="bg-white rounded-lg shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+//             {/* Modal Header */}
+//             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6">
+//               <div className="flex justify-between items-start">
+//                 <div>
+//                   <h2 className="text-2xl font-bold">{selectedFacultyContent.faculty.name}</h2>
+//                   <p className="text-blue-100 text-sm mt-1">
+//                     {selectedFacultyContent.faculty.facultyId} • {selectedFacultyContent.faculty.designation}
+//                   </p>
+//                 </div>
+//                 <button
+//                   onClick={() => setShowContentModal(false)}
+//                   className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+//                 >
+//                   <X className="h-6 w-6" />
+//                 </button>
+//               </div>
+
+//               {/* Tabs */}
+//               <div className="flex gap-2 mt-6">
+//                 <button
+//                   onClick={() => setActiveContentTab('content')}
+//                   className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+//                     activeContentTab === 'content'
+//                       ? 'bg-white text-blue-600'
+//                       : 'bg-blue-500 text-white hover:bg-blue-400'
+//                   }`}
+//                 >
+//                   <div className="flex items-center gap-2">
+//                     <FileText className="h-4 w-4" />
+//                     <span>Teaching Content ({selectedFacultyContent.content.length})</span>
+//                   </div>
+//                 </button>
+//                 <button
+//                   onClick={() => setActiveContentTab('lessons')}
+//                   className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+//                     activeContentTab === 'lessons'
+//                       ? 'bg-white text-blue-600'
+//                       : 'bg-blue-500 text-white hover:bg-blue-400'
+//                   }`}
+//                 >
+//                   <div className="flex items-center gap-2">
+//                     <BookOpen className="h-4 w-4" />
+//                     <span>Lesson Plans ({selectedFacultyContent.lessonPlans.length})</span>
+//                   </div>
+//                 </button>
+//               </div>
+//             </div>
+
+//             {/* Modal Body */}
+//             <div className="flex-1 overflow-y-auto p-6">
+//               {loadingContent ? (
+//                 <div className="flex items-center justify-center py-12">
+//                   <div className="text-center">
+//                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+//                     <p className="text-gray-600">Loading data...</p>
+//                   </div>
+//                 </div>
+//               ) : activeContentTab === 'content' ? (
+//                 // TEACHING CONTENT TAB
+//                 selectedFacultyContent.content.length === 0 ? (
+//                   <div className="text-center py-12">
+//                     <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+//                     <p className="text-gray-600 text-lg font-medium">No content uploaded yet</p>
+//                   </div>
+//                 ) : (
+//                   <div className="space-y-6">
+//                     {/* Content Summary */}
+//                     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+//                       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+//                         <div className="text-center">
+//                           <p className="text-3xl font-bold text-blue-600">{selectedFacultyContent.content.length}</p>
+//                           <p className="text-sm text-gray-600 mt-1">Total Items</p>
+//                         </div>
+//                         <div className="text-center">
+//                           <p className="text-3xl font-bold text-green-600">
+//                             {selectedFacultyContent.content.filter(c => c.status === 'APPROVED').length}
+//                           </p>
+//                           <p className="text-sm text-gray-600 mt-1">Approved</p>
+//                         </div>
+//                         <div className="text-center">
+//                           <p className="text-3xl font-bold text-yellow-600">
+//                             {selectedFacultyContent.content.filter(c => c.status === 'PENDING').length}
+//                           </p>
+//                           <p className="text-sm text-gray-600 mt-1">Pending</p>
+//                         </div>
+//                         <div className="text-center">
+//                           <p className="text-3xl font-bold text-orange-600">
+//                             {selectedFacultyContent.content.filter(c => c.status === 'CHANGES_REQUIRED').length}
+//                           </p>
+//                           <p className="text-sm text-gray-600 mt-1">Changes Req</p>
+//                         </div>
+//                         <div className="text-center">
+//                           <p className="text-3xl font-bold text-red-600">
+//                             {selectedFacultyContent.content.filter(c => c.status === 'REJECTED').length}
+//                           </p>
+//                           <p className="text-sm text-gray-600 mt-1">Rejected</p>
+//                         </div>
+//                       </div>
+//                     </div>
+
+//                     {/* Content organized by Course */}
+//                     {getContentGroupedByCourse(selectedFacultyContent.content).map(([courseName, courseItems]) => (
+//                       <div key={courseName} className="border border-gray-300 rounded-lg overflow-hidden">
+//                         {/* Course Header */}
+//                         <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 flex items-center justify-between">
+//                           <div className="flex items-center gap-2">
+//                             <BookOpen className="h-5 w-5" />
+//                             <h3 className="font-semibold text-lg">{courseName}</h3>
+//                           </div>
+//                           <span className="bg-white text-blue-600 px-3 py-1 rounded-full text-sm font-medium">
+//                             {courseItems.length} items
+//                           </span>
+//                         </div>
+
+//                         {/* Content by Type */}
+//                         <div className="divide-y">
+//                           {Object.entries(groupContentByType(courseItems)).map(([displayType, items]) => (
+//                             <div key={displayType} className="border-t border-gray-200">
+//                               <div className="bg-gray-50 px-4 py-2 flex items-center gap-2 border-b">
+//                                 <span className="text-2xl">{getContentIcon(items[0].type)}</span>
+//                                 <h4 className="font-medium text-gray-900 text-sm">{displayType}</h4>
+//                                 <span className="ml-auto bg-gray-300 text-gray-800 px-2 py-0.5 rounded text-xs font-medium">
+//                                   {items.length}
+//                                 </span>
+//                               </div>
+//                               <div className="divide-y">
+//                                 {items.map((item) => (
+//                                   <div key={item.id} className="p-4 hover:bg-gray-50 transition-colors">
+//                                     <div className="flex items-start justify-between gap-4">
+//                                       <div className="flex-1 min-w-0">
+//                                         <div className="flex items-center gap-2 mb-2 flex-wrap">
+//                                           <h5 className="font-medium text-gray-900 text-sm">{item.title}</h5>
+//                                           {getStatusBadge(item.status)}
+//                                           {item.lectureNumber && (
+//                                             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+//                                               #{item.lectureNumber}
+//                                             </span>
+//                                           )}
+//                                         </div>
+//                                         <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap mb-2">
+//                                           <span>{item.fileName}</span>
+//                                           <span>•</span>
+//                                           <span>{formatFileSize(item.fileSize)}</span>
+//                                           <span>•</span>
+//                                           <span>{new Date(item.uploadDate).toLocaleDateString()}</span>
+//                                         </div>
+//                                         {item.description && (
+//                                           <p className="text-xs text-gray-600 mt-1">{item.description}</p>
+//                                         )}
+//                                       </div>
+//                                       {item.fileUrl && (
+//                                         <div className="flex gap-2">
+//                                           <button
+//                                             onClick={() => handleViewFile(item.fileUrl)}
+//                                             className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors text-xs font-medium"
+//                                           >
+//                                             <Eye className="h-3 w-3" />
+//                                             View
+//                                           </button>
+//                                           <a
+//                                             href={item.fileUrl}
+//                                             target="_blank"
+//                                             rel="noopener noreferrer"
+//                                             className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-xs font-medium"
+//                                           >
+//                                             <Download className="h-3 w-3" />
+//                                             Download
+//                                           </a>
+//                                         </div>
+//                                       )}
+//                                     </div>
+//                                   </div>
+//                                 ))}
+//                               </div>
+//                             </div>
+//                           ))}
+//                         </div>
+//                       </div>
+//                     ))}
+//                   </div>
+//                 )
+//               ) : (
+//                 // LESSON PLANS TAB
+//                 selectedFacultyContent.lessonPlans.length === 0 ? (
+//                   <div className="text-center py-12">
+//                     <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+//                     <p className="text-gray-600 text-lg font-medium">No lesson plans yet</p>
+//                   </div>
+//                 ) : (
+//                   <div className="space-y-4">
+//                     {selectedFacultyContent.lessonPlans.map((plan) => (
+//                       <div key={plan.id} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition">
+//                         <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between">
+//                           <div className="flex items-center gap-3">
+//                             <BookOpen className="h-5 w-5 text-blue-600" />
+//                             <div>
+//                               <h4 className="font-semibold text-gray-900">{plan.title}</h4>
+//                               <p className="text-xs text-gray-600">{plan.courseCode} - {plan.courseName}</p>
+//                             </div>
+//                           </div>
+//                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+//                             plan.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
+//                             plan.status === 'SUBMITTED' ? 'bg-yellow-100 text-yellow-700' :
+//                             'bg-gray-100 text-gray-700'
+//                           }`}>
+//                             {plan.status}
+//                           </span>
+//                         </div>
+//                         <div className="p-4 space-y-3">
+//                           {plan.lectureNumber && (
+//                             <p className="text-sm">
+//                               <span className="font-medium text-gray-700">Lecture:</span> {plan.lectureNumber}
+//                             </p>
+//                           )}
+//                           <div className="grid grid-cols-2 gap-4 text-sm">
+//                             <p>
+//                               <span className="font-medium text-gray-700">Date Planned:</span><br/>
+//                               <span className="text-gray-900 font-medium">{new Date(plan.datePlanned).toLocaleDateString()}</span>
+//                             </p>
+//                             {plan.dateConducted && (
+//                               <p>
+//                                 <span className="font-medium text-gray-700">Date Conducted:</span><br/>
+//                                 <span className="text-gray-900 font-medium">{new Date(plan.dateConducted).toLocaleDateString()}</span>
+//                               </p>
+//                             )}
+//                           </div>
+//                           <div>
+//                             <p className="font-medium text-gray-700 text-sm mb-1">Topics Covered:</p>
+//                             <p className="text-sm text-gray-600 bg-blue-50 p-3 rounded border border-blue-200">{plan.topicsCovered}</p>
+//                           </div>
+//                           {plan.description && (
+//                             <div>
+//                               <p className="font-medium text-gray-700 text-sm mb-1">Description:</p>
+//                               <p className="text-sm text-gray-600">{plan.description}</p>
+//                             </div>
+//                           )}
+//                         </div>
+//                       </div>
+//                     ))}
+//                   </div>
+//                 )
+//               )}
+//             </div>
+
+//             {/* Modal Footer */}
+//             <div className="bg-gray-50 px-6 py-4 border-t flex justify-end">
+//               <button
+//                 onClick={() => setShowContentModal(false)}
+//                 className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
+//               >
+//                 Close
+//               </button>
+//             </div>
+//           </div>
+//         </div>
+//       )}
+
+//       {/* FILE VIEWER MODAL */}
+//       {showFileViewer && viewingFileUrl && (
+//         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[60] p-4">
+//           <div className="bg-white rounded-lg shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col">
+//             <div className="bg-gray-800 text-white p-4 flex justify-between items-center rounded-t-lg">
+//               <h3 className="font-semibold">File Preview</h3>
+//               <button
+//                 onClick={() => {
+//                   setShowFileViewer(false)
+//                   setViewingFileUrl('')
+//                 }}
+//                 className="text-white hover:bg-gray-700 p-2 rounded transition-colors"
+//               >
+//                 <X className="h-5 w-5" />
+//               </button>
+//             </div>
+//             <div className="flex-1 overflow-hidden">
+//               <iframe
+//                 src={viewingFileUrl}
+//                 className="w-full h-full"
+//                 title="File Preview"
+//               />
+//             </div>
+//           </div>
+//         </div>
+//       )}
+//     </div>
+//   )
+// }
+
 'use client'
 import { useState, useEffect } from 'react'
-import { Plus, Edit, Trash2, Upload as UploadIcon, Search, Grid, List, BookOpen, Users, Award, X, Check, ChevronDown, Eye, FileText, File, Download, AlertCircle, CheckCircle, Clock, XCircle } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Plus, Edit, Trash2, Upload as UploadIcon, Search, Grid, List, BookOpen, Users } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 import BulkUpload from '@/components/admin/BulkUpload'
 
@@ -2048,60 +3160,8 @@ interface Faculty {
   department: string | null
 }
 
-interface Course {
-  id: string
-  courseCode: string
-  courseName: string
-  semester: number
-  session: string
-  programme: {
-    id: string
-    programmeCode: string
-    programmeName: string
-    section: string | null
-  }
-}
-
-interface CourseAllocation {
-  id: string
-  facultyId: string
-  courseId: string
-  role: 'COORDINATOR' | 'CONTRIBUTOR'
-  course: Course
-}
-
-interface ContentItem {
-  id: string
-  title: string
-  type: string
-  uploadDate: string
-  status: 'PENDING' | 'APPROVED' | 'CHANGES_REQUIRED' | 'REJECTED'
-  courseCode: string
-  courseName: string
-  fileName: string
-  fileSize: number | null
-  fileUrl: string
-  lectureNumber?: number | null
-  description?: string | null
-}
-
-interface LessonPlan {
-  id: string
-  title: string
-  lectureNumber?: number | null
-  datePlanned: string
-  dateConducted?: string | null
-  topicsCovered: string
-  description?: string | null
-  status: string
-  courseCode: string
-  courseName: string
-  programmeName: string
-  programmeCode: string
-  section: string | null
-}
-
 export default function AdminFacultyPage() {
+  const router = useRouter()
   const [faculty, setFaculty] = useState<Faculty[]>([])
   const [filteredFaculty, setFilteredFaculty] = useState<Faculty[]>([])
   const [loading, setLoading] = useState(true)
@@ -2112,30 +3172,9 @@ export default function AdminFacultyPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showBulkUpload, setShowBulkUpload] = useState(false)
-  const [showCoursesModal, setShowCoursesModal] = useState(false)
-  const [showContentModal, setShowContentModal] = useState(false)
-  const [showFileViewer, setShowFileViewer] = useState(false)
   
   // Selected data
   const [selectedFaculty, setSelectedFaculty] = useState<Faculty | null>(null)
-  const [selectedFacultyCourses, setSelectedFacultyCourses] = useState<CourseAllocation[]>([])
-  const [selectedFacultyContent, setSelectedFacultyContent] = useState<{
-    faculty: Faculty | null
-    content: ContentItem[]
-    lessonPlans: LessonPlan[]
-  }>({
-    faculty: null,
-    content: [],
-    lessonPlans: []
-  })
-  const [viewingFileUrl, setViewingFileUrl] = useState('')
-  
-  // Loading states
-  const [loadingCourses, setLoadingCourses] = useState(false)
-  const [loadingContent, setLoadingContent] = useState(false)
-  
-  // Tab state
-  const [activeContentTab, setActiveContentTab] = useState<'content' | 'lessons'>('content')
   
   // Form data
   const [formData, setFormData] = useState({
@@ -2264,154 +3303,6 @@ export default function AdminFacultyPage() {
       contactNo: '',
       department: ''
     })
-  }
-
-  const loadFacultyCourses = async (facultyMember: Faculty) => {
-    setLoadingCourses(true)
-    setShowCoursesModal(true)
-    setSelectedFaculty(facultyMember)
-    setSelectedFacultyCourses([])
-    
-    try {
-      const res = await fetch(`/api/admin/faculty/${facultyMember.id}/courses`)
-      const data = await res.json()
-      
-      if (data.success) {
-        setSelectedFacultyCourses(data.allocations)
-      } else {
-        toast.error('Error loading courses')
-      }
-    } catch (error) {
-      toast.error('Error loading courses')
-    } finally {
-      setLoadingCourses(false)
-    }
-  }
-
-  const loadFacultyContent = async (facultyMember: Faculty) => {
-    setLoadingContent(true)
-    setShowContentModal(true)
-    setActiveContentTab('content')
-    setSelectedFacultyContent({
-      faculty: facultyMember,
-      content: [],
-      lessonPlans: []
-    })
-    
-    try {
-      const [contentRes, lessonPlansRes] = await Promise.all([
-        fetch(`/api/admin/faculty/${facultyMember.id}/content`),
-        fetch(`/api/admin/faculty/${facultyMember.id}/lesson-plans`)
-      ])
-      
-      const contentData = await contentRes.json()
-      const lessonPlansData = await lessonPlansRes.json()
-      
-      setSelectedFacultyContent({
-        faculty: facultyMember,
-        content: contentData.success ? contentData.content : [],
-        lessonPlans: lessonPlansData.success ? lessonPlansData.lessonPlans : []
-      })
-      
-      if (!contentData.success || !lessonPlansData.success) {
-        toast.error('Error loading some data')
-      }
-    } catch (error) {
-      console.error('Error:', error)
-      toast.error('Error loading data')
-    } finally {
-      setLoadingContent(false)
-    }
-  }
-
-  const handleViewFile = (fileUrl: string) => {
-    setViewingFileUrl(fileUrl)
-    setShowFileViewer(true)
-  }
-
-  const formatFileSize = (bytes: number | null): string => {
-    if (!bytes) return 'Unknown'
-    if (bytes < 1024) return bytes + ' B'
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB'
-    return (bytes / (1024 * 1024)).toFixed(2) + ' MB'
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'APPROVED':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-            <CheckCircle className="h-3 w-3" />
-            Approved
-          </span>
-        )
-      case 'PENDING':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
-            <Clock className="h-3 w-3" />
-            Pending
-          </span>
-        )
-      case 'CHANGES_REQUIRED':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
-            <AlertCircle className="h-3 w-3" />
-            Changes Required
-          </span>
-        )
-      case 'REJECTED':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-            <XCircle className="h-3 w-3" />
-            Rejected
-          </span>
-        )
-      default:
-        return null
-    }
-  }
-
-  const getContentIcon = (type: string) => {
-    switch (type.toUpperCase()) {
-      case 'COURSE_HANDOUT':
-        return '📘'
-      case 'LECTURE_PPT':
-        return '📊'
-      case 'ASSIGNMENT':
-        return '📝'
-      case 'QUESTION_BANK':
-        return '❓'
-      case 'QUESTION_PAPER':
-        return '📄'
-      case 'LAB_MANUAL':
-        return '🔬'
-      case 'REFERENCE_MATERIAL':
-        return '📚'
-      default:
-        return '📄'
-    }
-  }
-
-  const getContentGroupedByCourse = (content: ContentItem[]) => {
-    const grouped = content.reduce((acc, item) => {
-      const key = `${item.courseCode} - ${item.courseName}`
-      if (!acc[key]) acc[key] = []
-      acc[key].push(item)
-      return acc
-    }, {} as Record<string, ContentItem[]>)
-
-    return Object.entries(grouped)
-  }
-
-  const groupContentByType = (content: ContentItem[]) => {
-    const grouped = content.reduce((acc, item) => {
-      const displayType = item.type.replace(/_/g, ' ')
-      if (!acc[displayType]) acc[displayType] = []
-      acc[displayType].push(item)
-      return acc
-    }, {} as Record<string, ContentItem[]>)
-
-    return grouped
   }
 
   if (loading) {
@@ -2546,18 +3437,11 @@ export default function AdminFacultyPage() {
 
                 <div className="flex flex-wrap gap-2">
                   <button
-                    onClick={() => loadFacultyCourses(facultyMember)}
-                    className="flex-1 bg-indigo-100 text-indigo-700 px-3 py-2 rounded text-sm font-medium hover:bg-indigo-200 transition-colors flex items-center justify-center gap-1"
+                    onClick={() => router.push(`/admin/faculty/${facultyMember.id}/courses-content`)}
+                    className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all flex items-center justify-center gap-2 shadow-md"
                   >
                     <BookOpen className="h-4 w-4" />
-                    Courses
-                  </button>
-                  <button
-                    onClick={() => loadFacultyContent(facultyMember)}
-                    className="flex-1 bg-purple-100 text-purple-700 px-3 py-2 rounded text-sm font-medium hover:bg-purple-200 transition-colors flex items-center justify-center gap-1"
-                  >
-                    <FileText className="h-4 w-4" />
-                    Content
+                    Courses & Content
                   </button>
                   <button
                     onClick={() => handleEdit(facultyMember)}
@@ -2620,18 +3504,11 @@ export default function AdminFacultyPage() {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end gap-2">
                       <button
-                        onClick={() => loadFacultyCourses(facultyMember)}
+                        onClick={() => router.push(`/admin/faculty/${facultyMember.id}/courses-content`)}
                         className="text-indigo-600 hover:text-indigo-900"
-                        title="View Courses"
+                        title="Courses & Content"
                       >
                         <BookOpen className="h-5 w-5" />
-                      </button>
-                      <button
-                        onClick={() => loadFacultyContent(facultyMember)}
-                        className="text-purple-600 hover:text-purple-900"
-                        title="View Content"
-                      >
-                        <FileText className="h-5 w-5" />
                       </button>
                       <button
                         onClick={() => handleEdit(facultyMember)}
@@ -2761,383 +3638,6 @@ export default function AdminFacultyPage() {
             loadFaculty()
           }}
         />
-      )}
-
-      {/* COURSES MODAL */}
-      {showCoursesModal && selectedFaculty && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white p-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold">{selectedFaculty.name}</h2>
-                  <p className="text-blue-100 text-sm mt-1">Course Allocations</p>
-                </div>
-                <button
-                  onClick={() => setShowCoursesModal(false)}
-                  className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6">
-              {loadingCourses ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading courses...</p>
-                  </div>
-                </div>
-              ) : selectedFacultyCourses.length === 0 ? (
-                <div className="text-center py-12">
-                  <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-600 text-lg font-medium">No courses assigned</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {selectedFacultyCourses.map((allocation) => (
-                    <div
-                      key={allocation.id}
-                      className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="font-semibold text-gray-900">
-                              {allocation.course.courseName}
-                            </h3>
-                            <span
-                              className={`px-3 py-1 rounded-full text-xs font-bold text-white ${
-                                allocation.role === 'COORDINATOR' ? 'bg-purple-600' : 'bg-blue-600'
-                              }`}
-                            >
-                              {allocation.role === 'COORDINATOR' ? '👑 Coordinator' : '👤 Contributor'}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-600 mb-2">
-                            <span className="font-medium">Code:</span> {allocation.course.courseCode}
-                          </p>
-                          <div className="text-sm text-gray-600 space-y-1">
-                            <p>
-                              <span className="font-medium">Programme:</span>{' '}
-                              {allocation.course.programme.programmeName}
-                              {allocation.course.programme.section && ` - Section ${allocation.course.programme.section}`}
-                            </p>
-                            <p>
-                              <span className="font-medium">Semester:</span> {allocation.course.semester}
-                            </p>
-                            <p>
-                              <span className="font-medium">Session:</span> {allocation.course.session}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="bg-gray-50 px-6 py-4 border-t flex justify-end">
-              <button
-                onClick={() => setShowCoursesModal(false)}
-                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* CONTENT & LESSON PLANS VIEWER MODAL */}
-      {showContentModal && selectedFacultyContent.faculty && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
-            {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold">{selectedFacultyContent.faculty.name}</h2>
-                  <p className="text-blue-100 text-sm mt-1">
-                    {selectedFacultyContent.faculty.facultyId} • {selectedFacultyContent.faculty.designation}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowContentModal(false)}
-                  className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-
-              {/* Tabs */}
-              <div className="flex gap-2 mt-6">
-                <button
-                  onClick={() => setActiveContentTab('content')}
-                  className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-                    activeContentTab === 'content'
-                      ? 'bg-white text-blue-600'
-                      : 'bg-blue-500 text-white hover:bg-blue-400'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    <span>Teaching Content ({selectedFacultyContent.content.length})</span>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setActiveContentTab('lessons')}
-                  className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-                    activeContentTab === 'lessons'
-                      ? 'bg-white text-blue-600'
-                      : 'bg-blue-500 text-white hover:bg-blue-400'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <BookOpen className="h-4 w-4" />
-                    <span>Lesson Plans ({selectedFacultyContent.lessonPlans.length})</span>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6">
-              {loadingContent ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading data...</p>
-                  </div>
-                </div>
-              ) : activeContentTab === 'content' ? (
-                // TEACHING CONTENT TAB
-                selectedFacultyContent.content.length === 0 ? (
-                  <div className="text-center py-12">
-                    <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-600 text-lg font-medium">No content uploaded yet</p>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {/* Content Summary */}
-                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                        <div className="text-center">
-                          <p className="text-3xl font-bold text-blue-600">{selectedFacultyContent.content.length}</p>
-                          <p className="text-sm text-gray-600 mt-1">Total Items</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-3xl font-bold text-green-600">
-                            {selectedFacultyContent.content.filter(c => c.status === 'APPROVED').length}
-                          </p>
-                          <p className="text-sm text-gray-600 mt-1">Approved</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-3xl font-bold text-yellow-600">
-                            {selectedFacultyContent.content.filter(c => c.status === 'PENDING').length}
-                          </p>
-                          <p className="text-sm text-gray-600 mt-1">Pending</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-3xl font-bold text-orange-600">
-                            {selectedFacultyContent.content.filter(c => c.status === 'CHANGES_REQUIRED').length}
-                          </p>
-                          <p className="text-sm text-gray-600 mt-1">Changes Req</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-3xl font-bold text-red-600">
-                            {selectedFacultyContent.content.filter(c => c.status === 'REJECTED').length}
-                          </p>
-                          <p className="text-sm text-gray-600 mt-1">Rejected</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Content organized by Course */}
-                    {getContentGroupedByCourse(selectedFacultyContent.content).map(([courseName, courseItems]) => (
-                      <div key={courseName} className="border border-gray-300 rounded-lg overflow-hidden">
-                        {/* Course Header */}
-                        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <BookOpen className="h-5 w-5" />
-                            <h3 className="font-semibold text-lg">{courseName}</h3>
-                          </div>
-                          <span className="bg-white text-blue-600 px-3 py-1 rounded-full text-sm font-medium">
-                            {courseItems.length} items
-                          </span>
-                        </div>
-
-                        {/* Content by Type */}
-                        <div className="divide-y">
-                          {Object.entries(groupContentByType(courseItems)).map(([displayType, items]) => (
-                            <div key={displayType} className="border-t border-gray-200">
-                              <div className="bg-gray-50 px-4 py-2 flex items-center gap-2 border-b">
-                                <span className="text-2xl">{getContentIcon(items[0].type)}</span>
-                                <h4 className="font-medium text-gray-900 text-sm">{displayType}</h4>
-                                <span className="ml-auto bg-gray-300 text-gray-800 px-2 py-0.5 rounded text-xs font-medium">
-                                  {items.length}
-                                </span>
-                              </div>
-                              <div className="divide-y">
-                                {items.map((item) => (
-                                  <div key={item.id} className="p-4 hover:bg-gray-50 transition-colors">
-                                    <div className="flex items-start justify-between gap-4">
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                          <h5 className="font-medium text-gray-900 text-sm">{item.title}</h5>
-                                          {getStatusBadge(item.status)}
-                                          {item.lectureNumber && (
-                                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                                              #{item.lectureNumber}
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap mb-2">
-                                          <span>{item.fileName}</span>
-                                          <span>•</span>
-                                          <span>{formatFileSize(item.fileSize)}</span>
-                                          <span>•</span>
-                                          <span>{new Date(item.uploadDate).toLocaleDateString()}</span>
-                                        </div>
-                                        {item.description && (
-                                          <p className="text-xs text-gray-600 mt-1">{item.description}</p>
-                                        )}
-                                      </div>
-                                      {item.fileUrl && (
-                                        <div className="flex gap-2">
-                                          <button
-                                            onClick={() => handleViewFile(item.fileUrl)}
-                                            className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors text-xs font-medium"
-                                          >
-                                            <Eye className="h-3 w-3" />
-                                            View
-                                          </button>
-                                          <a
-                                            href={item.fileUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-xs font-medium"
-                                          >
-                                            <Download className="h-3 w-3" />
-                                            Download
-                                          </a>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )
-              ) : (
-                // LESSON PLANS TAB
-                selectedFacultyContent.lessonPlans.length === 0 ? (
-                  <div className="text-center py-12">
-                    <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-600 text-lg font-medium">No lesson plans yet</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {selectedFacultyContent.lessonPlans.map((plan) => (
-                      <div key={plan.id} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition">
-                        <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <BookOpen className="h-5 w-5 text-blue-600" />
-                            <div>
-                              <h4 className="font-semibold text-gray-900">{plan.title}</h4>
-                              <p className="text-xs text-gray-600">{plan.courseCode} - {plan.courseName}</p>
-                            </div>
-                          </div>
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            plan.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
-                            plan.status === 'SUBMITTED' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-gray-100 text-gray-700'
-                          }`}>
-                            {plan.status}
-                          </span>
-                        </div>
-                        <div className="p-4 space-y-3">
-                          {plan.lectureNumber && (
-                            <p className="text-sm">
-                              <span className="font-medium text-gray-700">Lecture:</span> {plan.lectureNumber}
-                            </p>
-                          )}
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <p>
-                              <span className="font-medium text-gray-700">Date Planned:</span><br/>
-                              <span className="text-gray-900 font-medium">{new Date(plan.datePlanned).toLocaleDateString()}</span>
-                            </p>
-                            {plan.dateConducted && (
-                              <p>
-                                <span className="font-medium text-gray-700">Date Conducted:</span><br/>
-                                <span className="text-gray-900 font-medium">{new Date(plan.dateConducted).toLocaleDateString()}</span>
-                              </p>
-                            )}
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-700 text-sm mb-1">Topics Covered:</p>
-                            <p className="text-sm text-gray-600 bg-blue-50 p-3 rounded border border-blue-200">{plan.topicsCovered}</p>
-                          </div>
-                          {plan.description && (
-                            <div>
-                              <p className="font-medium text-gray-700 text-sm mb-1">Description:</p>
-                              <p className="text-sm text-gray-600">{plan.description}</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="bg-gray-50 px-6 py-4 border-t flex justify-end">
-              <button
-                onClick={() => setShowContentModal(false)}
-                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* FILE VIEWER MODAL */}
-      {showFileViewer && viewingFileUrl && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-lg shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col">
-            <div className="bg-gray-800 text-white p-4 flex justify-between items-center rounded-t-lg">
-              <h3 className="font-semibold">File Preview</h3>
-              <button
-                onClick={() => {
-                  setShowFileViewer(false)
-                  setViewingFileUrl('')
-                }}
-                className="text-white hover:bg-gray-700 p-2 rounded transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <iframe
-                src={viewingFileUrl}
-                className="w-full h-full"
-                title="File Preview"
-              />
-            </div>
-          </div>
-        </div>
       )}
     </div>
   )

@@ -24,18 +24,27 @@ interface ContentItem {
   }
 }
 
+interface CHO {
+  id: string
+  courseCode: string
+  courseTitle: string
+  status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED'
+  updatedAt: string
+}
+
 export default function SubmissionsPage() {
   const router = useRouter()
   const [contents, setContents] = useState<ContentItem[]>([])
+  const [chos, setCHOs] = useState<CHO[]>([])
   const [filteredContents, setFilteredContents] = useState<ContentItem[]>([])
+  const [filteredCHOs, setFilteredCHOs] = useState<CHO[]>([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [email, setEmail] = useState<string>('')
+  const [activeTab, setActiveTab] = useState<'content' | 'cho'>('content')
 
   const [filterStatus, setFilterStatus] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedContent, setSelectedContent] = useState<ContentItem | null>(null)
-  const [showModal, setShowModal] = useState(false)
 
   useEffect(() => {
     const storedEmail = localStorage.getItem('facultyEmail')
@@ -47,59 +56,81 @@ export default function SubmissionsPage() {
     }
     
     setEmail(storedEmail)
-    loadContent(storedEmail)
+    loadData(storedEmail)
   }, [router])
 
   useEffect(() => {
     applyFilters()
-  }, [contents, filterStatus, searchTerm])
+  }, [contents, chos, filterStatus, searchTerm, activeTab])
 
-  const loadContent = async (facultyEmail: string) => {
+  const loadData = async (facultyEmail: string) => {
     try {
       setLoading(true)
-      console.log('🔄 Fetching content for:', facultyEmail)
+      console.log('🔄 Fetching data for:', facultyEmail)
       
-      const res = await fetch(`/api/faculty/content?email=${encodeURIComponent(facultyEmail)}`)
-      const data = await res.json()
+      // Load both content and CHOs
+      const [contentRes, choRes] = await Promise.all([
+        fetch(`/api/faculty/content?email=${encodeURIComponent(facultyEmail)}`),
+        fetch(`/api/faculty/course-handout/list?email=${encodeURIComponent(facultyEmail)}`)
+      ])
 
-      console.log('📦 API Response:', data)
+      const contentData = await contentRes.json()
+      const choData = await choRes.json()
 
-      if (data.success) {
-        if (Array.isArray(data.content)) {
-          console.log('✅ Content items:', data.content.length)
-          setContents(data.content)
-        } else {
-          console.error('❌ Content is not an array:', data.content)
-          toast.error('Invalid data format')
-        }
-      } else {
-        console.error('❌ API Error:', data.error)
-        toast.error(data.error || 'Error loading content')
+      console.log('📦 Content Response:', contentData)
+      console.log('📄 CHO Response:', choData)
+
+      if (contentData.success && Array.isArray(contentData.content)) {
+        console.log('✅ Content items:', contentData.content.length)
+        setContents(contentData.content)
+      }
+
+      if (choData.success && Array.isArray(choData.chos)) {
+        console.log('✅ CHO items:', choData.chos.length)
+        setCHOs(choData.chos)
       }
     } catch (error) {
       console.error('❌ Fetch Error:', error)
-      toast.error('Error loading content')
+      toast.error('Error loading data')
     } finally {
       setLoading(false)
     }
   }
 
   const applyFilters = () => {
-    let result = contents
+    if (activeTab === 'content') {
+      let result = contents
 
-    if (filterStatus !== 'all') {
-      result = result.filter(c => c.approvalStatus === filterStatus)
+      if (filterStatus !== 'all') {
+        result = result.filter(c => c.approvalStatus === filterStatus)
+      }
+
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase()
+        result = result.filter(c =>
+          c.title.toLowerCase().includes(q) ||
+          c.course.courseCode.toLowerCase().includes(q)
+        )
+      }
+
+      setFilteredContents(result)
+    } else {
+      let result = chos
+
+      if (filterStatus !== 'all') {
+        result = result.filter(c => c.status === filterStatus)
+      }
+
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase()
+        result = result.filter(c =>
+          c.courseTitle.toLowerCase().includes(q) ||
+          c.courseCode.toLowerCase().includes(q)
+        )
+      }
+
+      setFilteredCHOs(result)
     }
-
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase()
-      result = result.filter(c =>
-        c.title.toLowerCase().includes(q) ||
-        c.course.courseCode.toLowerCase().includes(q)
-      )
-    }
-
-    setFilteredContents(result)
   }
 
   const handleDelete = async (id: string) => {
@@ -159,8 +190,10 @@ export default function SubmissionsPage() {
   const getStatusColor = (status: string) => {
     switch(status) {
       case 'APPROVED': return 'bg-green-50 border-green-200'
-      case 'PENDING': return 'bg-yellow-50 border-yellow-200'
+      case 'PENDING': 
+      case 'SUBMITTED': return 'bg-yellow-50 border-yellow-200'
       case 'CHANGES_REQUIRED': return 'bg-orange-50 border-orange-200'
+      case 'DRAFT': return 'bg-gray-50 border-gray-200'
       default: return 'bg-red-50 border-red-200'
     }
   }
@@ -170,9 +203,12 @@ export default function SubmissionsPage() {
       case 'APPROVED':
         return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700"><CheckCircle className="h-3 w-3" /> Approved</span>
       case 'PENDING':
+      case 'SUBMITTED':
         return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700"><Clock className="h-3 w-3" /> Pending</span>
       case 'CHANGES_REQUIRED':
         return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700"><AlertCircle className="h-3 w-3" /> Changes Required</span>
+      case 'DRAFT':
+        return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700"><Clock className="h-3 w-3" /> Draft</span>
       default:
         return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700"><XCircle className="h-3 w-3" /> Rejected</span>
     }
@@ -215,7 +251,7 @@ export default function SubmissionsPage() {
           <button
             onClick={() => {
               const storedEmail = localStorage.getItem('facultyEmail')
-              if (storedEmail) loadContent(storedEmail)
+              if (storedEmail) loadData(storedEmail)
             }}
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition-colors flex items-center gap-2"
           >
@@ -223,25 +259,34 @@ export default function SubmissionsPage() {
             Refresh
           </button>
           <span className="px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold">
-            {filteredContents.length} of {contents.length}
+            {activeTab === 'content' ? filteredContents.length : filteredCHOs.length} items
           </span>
         </div>
       </div>
 
-      {/* Debug Info */}
-      {contents.length === 0 && !loading && (
-        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg mb-6">
-          <p className="text-blue-800 text-sm">
-            <strong>Debug:</strong> No content records found for email: {email}
-          </p>
-          <button
-            onClick={() => console.log('Contents:', contents)}
-            className="mt-2 text-blue-600 underline text-sm"
-          >
-            Check Console
-          </button>
-        </div>
-      )}
+      {/* Tabs */}
+      <div className="mb-6 flex gap-2 border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab('content')}
+          className={`px-6 py-3 font-semibold transition-colors ${
+            activeTab === 'content'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          📚 Teaching Content ({contents.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('cho')}
+          className={`px-6 py-3 font-semibold transition-colors ${
+            activeTab === 'cho'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          📘 Course Handouts ({chos.length})
+        </button>
+      </div>
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg shadow border border-gray-200 mb-6 flex gap-4 flex-wrap">
@@ -253,10 +298,21 @@ export default function SubmissionsPage() {
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
           >
             <option value="all">All Status</option>
-            <option value="APPROVED">✅ Approved</option>
-            <option value="PENDING">⏳ Pending</option>
-            <option value="CHANGES_REQUIRED">⚠️ Changes Required</option>
-            <option value="REJECTED">❌ Rejected</option>
+            {activeTab === 'content' ? (
+              <>
+                <option value="APPROVED">✅ Approved</option>
+                <option value="PENDING">⏳ Pending</option>
+                <option value="CHANGES_REQUIRED">⚠️ Changes Required</option>
+                <option value="REJECTED">❌ Rejected</option>
+              </>
+            ) : (
+              <>
+                <option value="APPROVED">✅ Approved</option>
+                <option value="SUBMITTED">📤 Submitted</option>
+                <option value="DRAFT">📝 Draft</option>
+                <option value="REJECTED">❌ Rejected</option>
+              </>
+            )}
           </select>
         </div>
 
@@ -268,7 +324,7 @@ export default function SubmissionsPage() {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by title or course code..."
+              placeholder={`Search by ${activeTab === 'content' ? 'title or course code' : 'course name or code'}...`}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
             />
           </div>
@@ -276,103 +332,158 @@ export default function SubmissionsPage() {
       </div>
 
       {/* Content List */}
-      {filteredContents.length === 0 ? (
-        <div className="bg-white p-12 rounded-lg shadow text-center border border-gray-200">
-          <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-          <p className="text-gray-600 font-medium">No submissions found</p>
-          <p className="text-gray-500 text-sm mt-2">
-            {contents.length === 0
-              ? "You haven't uploaded any content yet. Go to Upload Content to get started."
-              : "No content matches your filters"}
-          </p>
-          {contents.length === 0 && (
-            <button
-              onClick={() => router.push('/faculty/upload')}
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              Upload Content
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filteredContents.map(content => (
-            <div key={content.id} className={`p-5 rounded-lg border ${getStatusColor(content.approvalStatus)} hover:shadow-md transition`}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <span className="text-2xl">{getContentIcon(content.contentType)}</span>
-                    <h4 className="font-semibold text-gray-900">{content.title}</h4>
-                    {getStatusBadge(content.approvalStatus)}
-                    <span className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded text-xs font-medium">
-                      {formatContentType(content.contentType)}
-                    </span>
-                    {content.lectureNumber && (
-                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
-                        #{content.lectureNumber}
+      {activeTab === 'content' ? (
+        filteredContents.length === 0 ? (
+          <div className="bg-white p-12 rounded-lg shadow text-center border border-gray-200">
+            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-600 font-medium">No teaching content found</p>
+            <p className="text-gray-500 text-sm mt-2">
+              {contents.length === 0
+                ? "You haven't uploaded any content yet. Go to Upload Content to get started."
+                : "No content matches your filters"}
+            </p>
+            {contents.length === 0 && (
+              <button
+                onClick={() => router.push('/faculty/upload')}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Upload Content
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredContents.map(content => (
+              <div key={content.id} className={`p-5 rounded-lg border ${getStatusColor(content.approvalStatus)} hover:shadow-md transition`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <span className="text-2xl">{getContentIcon(content.contentType)}</span>
+                      <h4 className="font-semibold text-gray-900">{content.title}</h4>
+                      {getStatusBadge(content.approvalStatus)}
+                      <span className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded text-xs font-medium">
+                        {formatContentType(content.contentType)}
                       </span>
+                      {content.lectureNumber && (
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                          #{content.lectureNumber}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3 text-xs text-gray-600 mb-2">
+                      <span className="font-medium text-blue-600">{content.course.courseCode}</span>
+                      <span>•</span>
+                      <span>{content.fileName}</span>
+                      <span>•</span>
+                      <span>{formatFileSize(content.fileSize)}</span>
+                      <span>•</span>
+                      <span>{new Date(content.uploadDate).toLocaleDateString()}</span>
+                    </div>
+
+                    {content.description && (
+                      <p className="text-sm text-gray-700 mb-2">{content.description}</p>
+                    )}
+
+                    {content.coordinatorNotes && (
+                      <div className="mt-2 p-2 bg-yellow-100 border border-yellow-300 rounded text-xs text-yellow-800">
+                        <p className="font-semibold mb-1">📝 Coordinator Feedback:</p>
+                        <p>{content.coordinatorNotes}</p>
+                      </div>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-3 text-xs text-gray-600 mb-2">
-                    <span className="font-medium text-blue-600">{content.course.courseCode}</span>
-                    <span>•</span>
-                    <span>{content.fileName}</span>
-                    <span>•</span>
-                    <span>{formatFileSize(content.fileSize)}</span>
-                    <span>•</span>
-                    <span>{new Date(content.uploadDate).toLocaleDateString()}</span>
-                  </div>
-
-                  {content.description && (
-                    <p className="text-sm text-gray-700 mb-2">{content.description}</p>
-                  )}
-
-                  {content.coordinatorNotes && (
-                    <div className="mt-2 p-2 bg-yellow-100 border border-yellow-300 rounded text-xs text-yellow-800">
-                      <p className="font-semibold mb-1">📝 Coordinator Feedback:</p>
-                      <p>{content.coordinatorNotes}</p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => handleViewFile(content.fileUrl)}
-                    className="p-2 text-indigo-600 hover:bg-indigo-100 rounded transition-colors"
-                    title="View File"
-                  >
-                    <Eye className="h-5 w-5" />
-                  </button>
-                  <a
-                    href={content.fileUrl}
-                    download
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 text-blue-600 hover:bg-blue-100 rounded transition-colors"
-                    title="Download"
-                  >
-                    <Download className="h-5 w-5" />
-                  </a>
-                  {content.approvalStatus !== 'APPROVED' && (
+                  <div className="flex gap-2 flex-shrink-0">
                     <button
-                      onClick={() => handleDelete(content.id)}
-                      disabled={deleting === content.id}
-                      className="p-2 text-red-600 hover:bg-red-100 rounded transition-colors disabled:opacity-50"
-                      title="Delete"
+                      onClick={() => handleViewFile(content.fileUrl)}
+                      className="p-2 text-indigo-600 hover:bg-indigo-100 rounded transition-colors"
+                      title="View File"
                     >
-                      {deleting === content.id ? (
-                        <Loader className="h-5 w-5 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-5 w-5" />
-                      )}
+                      <Eye className="h-5 w-5" />
                     </button>
-                  )}
+                    <a
+                      href={content.fileUrl}
+                      download
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 text-blue-600 hover:bg-blue-100 rounded transition-colors"
+                      title="Download"
+                    >
+                      <Download className="h-5 w-5" />
+                    </a>
+                    {content.approvalStatus !== 'APPROVED' && (
+                      <button
+                        onClick={() => handleDelete(content.id)}
+                        disabled={deleting === content.id}
+                        className="p-2 text-red-600 hover:bg-red-100 rounded transition-colors disabled:opacity-50"
+                        title="Delete"
+                      >
+                        {deleting === content.id ? (
+                          <Loader className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-5 w-5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )
+      ) : (
+        // CHO List
+        filteredCHOs.length === 0 ? (
+          <div className="bg-white p-12 rounded-lg shadow text-center border border-gray-200">
+            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-600 font-medium">No course handouts found</p>
+            <p className="text-gray-500 text-sm mt-2">
+              {chos.length === 0
+                ? "You haven't created any course handouts yet."
+                : "No CHO matches your filters"}
+            </p>
+            {chos.length === 0 && (
+              <button
+                onClick={() => router.push('/faculty/course-handout')}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Create Course Handout
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredCHOs.map(cho => (
+              <div key={cho.id} className={`p-5 rounded-lg border ${getStatusColor(cho.status)} hover:shadow-md transition`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <span className="text-2xl">📘</span>
+                      <h4 className="font-semibold text-gray-900">{cho.courseTitle}</h4>
+                      {getStatusBadge(cho.status)}
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                        {cho.courseCode}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3 text-xs text-gray-600">
+                      <span>Last updated: {new Date(cho.updatedAt).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => router.push('/faculty/course-handout')}
+                      className="px-4 py-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors font-medium"
+                    >
+                      {cho.status === 'DRAFT' ? 'Continue Editing' : 'View'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
       )}
     </div>
   )

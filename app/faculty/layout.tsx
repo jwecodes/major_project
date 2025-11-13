@@ -2,7 +2,7 @@
 import { ReactNode, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, BookOpen, Upload, FileText, LogOut, Menu, X } from 'lucide-react'
+import { LayoutDashboard, BookOpen, Upload, FileText, LogOut, Menu, X, Crown } from 'lucide-react'
 
 export default function FacultyLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname()
@@ -50,6 +50,18 @@ export default function FacultyLayout({ children }: { children: ReactNode }) {
       href: '/faculty/courses',
       icon: BookOpen,
       active: pathname === '/faculty/courses'
+    },
+    {
+      label: 'Course Handout (CHO)',
+      href: '/faculty/course-handout',
+      icon: FileText,
+      active: pathname === '/faculty/course-handout'
+    },
+    {
+      label: 'Coordination',
+      href: '/faculty/coordination',
+      icon: Crown, // Import Crown from lucide-react
+      active: pathname === '/faculty/coordination'
     },
     {
       label: 'Lesson Plans',

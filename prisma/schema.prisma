@@ -306,6 +306,7 @@ enum ContentType {
   QUESTION_BANK       // Question Bank
   QUESTION_PAPER      // Question Papers
   LAB_MANUAL          // Lab Manual
+  LAB_ASSIGNMENT      // Lab Assignments
   REFERENCE_MATERIAL  // Reference Materials
 }
 

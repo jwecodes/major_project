@@ -1,7 +1,28 @@
 'use server'
 
-import { prisma } from '@/lib/prisma'
+import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+
+// Helper functions for safe data extraction
+const safeString = (value: any): string => {
+  if (value === null || value === undefined) return ''
+  return String(value).trim()
+}
+
+const safeInt = (value: any, defaultValue: number = 0): number => {
+  const parsed = parseInt(String(value))
+  return isNaN(parsed) ? defaultValue : parsed
+}
+
+const safeFloat = (value: any, defaultValue: number = 0): number => {
+  const parsed = parseFloat(String(value))
+  return isNaN(parsed) ? defaultValue : parsed
+}
+
+const safeBoolean = (value: any): boolean => {
+  const str = safeString(value).toLowerCase()
+  return str === 'yes' || str === 'true' || str === '1'
+}
 
 // ============================================
 // PROGRAMME ACTIONS
@@ -303,13 +324,26 @@ export async function createFaculty(data: {
   programmeId?: string
 }) {
   try {
-    const user = await prisma.user.create({
-      data: {
-        email: data.email,
-        name: data.name,
-        role: 'FACULTY' as any
-      }
+    let user = await prisma.user.findUnique({
+      where: { email: data.email }
     })
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email: data.email,
+          name: data.name,
+        }
+      })
+
+      await prisma.userRole.create({
+        data: {
+          userId: user.id,
+          role: 'FACULTY',
+          isActive: true
+        }
+      })
+    }
 
     await prisma.faculty.create({
       data: {
@@ -475,13 +509,13 @@ export async function removeAllocation(id: string) {
 export async function bulkUploadProgrammes(data: any[]) {
   try {
     const programmes = data.map(row => ({
-      session: row.session || row.Session || '',
-      programmeCode: row.programmeCode || row['Programme Code'] || '',
-      programmeName: row.programmeName || row['Programme Name'] || '',
-      duration: parseInt(row.duration || row.Duration || 4),
-      currentSemester: parseInt(row.currentSemester || row['Current Semester'] || 1),
-      section: row.section || row.Section || null,
-      noOfStudents: parseInt(row.noOfStudents || row['No of Students'] || 0)
+      session: safeString(row.session || row.Session),
+      programmeCode: safeString(row.programmeCode || row['Programme Code']),
+      programmeName: safeString(row.programmeName || row['Programme Name']),
+      duration: safeInt(row.duration || row.Duration, 4),
+      currentSemester: safeInt(row.currentSemester || row['Current Semester'], 1),
+      section: safeString(row.section || row.Section) || null,
+      noOfStudents: safeInt(row.noOfStudents || row['No of Students'], 0)
     }))
 
     const validProgrammes = programmes.filter(p => 
@@ -489,7 +523,7 @@ export async function bulkUploadProgrammes(data: any[]) {
     )
 
     if (validProgrammes.length === 0) {
-      return { success: false, error: 'No valid programme data found. Please check your Excel file.' }
+      return { success: false, error: 'No valid programme data found. Please check your file.' }
     }
 
     const result = await prisma.programme.createMany({
@@ -498,7 +532,11 @@ export async function bulkUploadProgrammes(data: any[]) {
     })
 
     revalidatePath('/admin/programmes')
-    return { success: true, count: result.count }
+    return { 
+      success: true, 
+      count: result.count,
+      message: `Successfully uploaded ${result.count} programmes!`
+    }
   } catch (error: any) {
     console.error('Bulk upload programmes error:', error)
     return { success: false, error: error.message || 'Failed to upload programmes. Check your data format.' }
@@ -534,10 +572,10 @@ export async function bulkUploadCourses(data: any[]) {
     const failedCourses: { row: number; courseCode: string; reason: string }[] = []
 
     data.forEach((row, index) => {
-      const session = row.session || row.Session || ''
-      const programmeCode = row.programmeCode || row['Programme Code'] || ''
-      const courseCode = row.courseCode || row['Course Code'] || ''
-      const courseName = row.courseName || row['Course Name'] || ''
+      const session = safeString(row.session || row.Session)
+      const programmeCode = safeString(row.programmeCode || row['Programme Code'])
+      const courseCode = safeString(row.courseCode || row['Course Code'])
+      const courseName = safeString(row.courseName || row['Course Name'])
 
       if (!session) {
         failedCourses.push({ row: index + 1, courseCode, reason: 'Missing Session' })
@@ -575,20 +613,20 @@ export async function bulkUploadCourses(data: any[]) {
       validCourses.push({
         session,
         programmeId: programme.id,
-        semester: parseInt(row.semester || row.Semester || 1),
+        semester: safeInt(row.semester || row.Semester, 1),
         courseCode,
         courseName,
-        l: parseInt(row.l || row.L || 0),
-        t: parseInt(row.t || row.T || 0),
-        p: parseInt(row.p || row.P || 0),
-        s: parseInt(row.s || row.S || 0),
-        credits: parseInt(row.credits || row.Credits || 0),
-        totalHours: parseInt(row.totalHours || row['Total Hours'] || 0),
-        courseType: (row.courseType || row['Course Type'] || 'CORE') as any,
-        deliveryMode: (row.deliveryMode || row['Delivery Mode'] || 'THEORY') as any,
-        roomNo: row.roomNo || row['Room No'] || null,
-        attendance: row.attendance === 'Yes' || row.Attendance === 'Yes',
-        category: (row.category || row.Category || 'MANDATORY') as any
+        l: safeInt(row.l || row.L, 0),
+        t: safeInt(row.t || row.T, 0),
+        p: safeInt(row.p || row.P, 0),
+        s: safeInt(row.s || row.S, 0),
+        credits: safeInt(row.credits || row.Credits, 0),
+        totalHours: safeInt(row.totalHours || row['Total Hours'], 0),
+        courseType: safeString(row.courseType || row['Course Type'] || 'CORE') as any,
+        deliveryMode: safeString(row.deliveryMode || row['Delivery Mode'] || 'THEORY') as any,
+        roomNo: safeString(row.roomNo || row['Room No']) || null,
+        attendance: safeBoolean(row.attendance || row.Attendance),
+        category: safeString(row.category || row.Category || 'MANDATORY') as any
       })
     })
 
@@ -621,7 +659,12 @@ export async function bulkUploadCourses(data: any[]) {
       success: true, 
       count: result.count,
       message,
-      failedCount: failedCourses.length
+      failedCount: failedCourses.length,
+      stats: {
+        total: validCourses.length,
+        success: result.count,
+        errors: failedCourses.length
+      }
     }
   } catch (error: any) {
     console.error('Bulk upload courses error:', error)
@@ -631,51 +674,233 @@ export async function bulkUploadCourses(data: any[]) {
 
 export async function bulkUploadFaculty(data: any[]) {
   try {
-    const facultyData = await Promise.all(
-      data.map(async (row) => {
-        const email = row.email || row.Email || ''
-        
+    // Group rows by faculty to handle duplicates (same faculty, multiple courses)
+    const facultyMap = new Map<string, {
+      info: any
+      courses: Array<{ programmeCode: string; section?: string; semester: number; courseCode: string; role: string }>
+    }>()
+
+    data.forEach((row) => {
+      const facultyId = safeString(row['Faculty ID'] || row.facultyId)
+      const email = safeString(row['Email'] || row.email).toLowerCase()
+      
+      if (!facultyId || !email) return
+
+      if (!facultyMap.has(facultyId)) {
+        facultyMap.set(facultyId, {
+          info: {
+            facultyId,
+            name: safeString(row['Name'] || row.name),
+            email,
+            designation: safeString(row['Designation'] || row.designation),
+            contactNo: safeString(row['Contact Number'] || row['Contact No'] || row.contactNo) || null,
+            department: safeString(row['Department'] || row.department) || null,
+          },
+          courses: []
+        })
+      }
+
+      // Add course allocation if provided
+      const programmeCode = safeString(row['Programme Code'] || row.programmeCode)
+      const courseCode = safeString(row['Course Code'] || row.courseCode)
+      const role = safeString(row['Role'] || row.role)
+      const semester = safeString(row['Semester'] || row.semester)
+
+      if (programmeCode && courseCode && role) {
+        facultyMap.get(facultyId)!.courses.push({
+          programmeCode,
+          section: safeString(row['Section'] || row.section) || undefined,
+          semester: semester ? parseInt(semester) : 0,
+          courseCode,
+          role: role.toUpperCase()
+        })
+      }
+    })
+
+    if (facultyMap.size === 0) {
+      return { 
+        success: false, 
+        error: 'No valid faculty data found. Please check your file.' 
+      }
+    }
+
+    let createdCount = 0
+    let updatedCount = 0
+    let allocatedCount = 0
+    const errors: string[] = []
+
+    // Process each faculty member
+    for (const [facultyId, data] of facultyMap) {
+      try {
+        const { info, courses } = data
+
+        // Validate required fields
+        if (!info.name || !info.designation) {
+          errors.push(`${facultyId}: Missing name or designation`)
+          continue
+        }
+
+        // Check if user exists
         let user = await prisma.user.findUnique({
-          where: { email }
+          where: { email: info.email }
         })
 
+        // Create user if doesn't exist
         if (!user) {
           user = await prisma.user.create({
             data: {
-              email,
-              name: row.name || row.Name || '',
-              role: 'FACULTY' as any
+              email: info.email,
+              name: info.name,
             }
           })
+
+          // Assign FACULTY role
+          await prisma.userRole.create({
+            data: {
+              userId: user.id,
+              role: 'FACULTY',
+              isActive: true
+            }
+          })
+
+          createdCount++
         }
 
-        return {
-          userId: user.id,
-          facultyId: row.facultyId || row['Faculty ID'] || '',
-          name: row.name || row.Name || '',
-          designation: row.designation || row.Designation || '',
-          email,
-          contactNo: row.contactNo || row['Contact No'] || '',
-          department: row.department || row.Department || null,
-          programmeId: null
-        }
-      })
-    )
+        // Check if faculty record exists
+        let faculty = await prisma.faculty.findUnique({
+          where: { email: info.email }
+        })
 
-    await prisma.faculty.createMany({
-      data: facultyData,
-      skipDuplicates: true
-    })
+        if (!faculty) {
+          // Create faculty record
+          faculty = await prisma.faculty.create({
+            data: {
+              userId: user.id,
+              facultyId: info.facultyId,
+              name: info.name,
+              designation: info.designation,
+              email: info.email,
+              contactNo: info.contactNo,
+              department: info.department,
+            }
+          })
+        } else {
+          // Update existing faculty record
+          faculty = await prisma.faculty.update({
+            where: { id: faculty.id },
+            data: {
+              facultyId: info.facultyId,
+              name: info.name,
+              designation: info.designation,
+              contactNo: info.contactNo,
+              department: info.department,
+            }
+          })
+          updatedCount++
+        }
+
+        // Process course allocations
+        for (const courseAlloc of courses) {
+          try {
+            // Validate role
+            if (courseAlloc.role !== 'COORDINATOR' && courseAlloc.role !== 'CONTRIBUTOR') {
+              errors.push(`${facultyId}: Invalid role "${courseAlloc.role}" for course ${courseAlloc.courseCode}`)
+              continue
+            }
+
+            // Find the course
+            const course = await prisma.course.findFirst({
+              where: {
+                courseCode: courseAlloc.courseCode,
+                semester: courseAlloc.semester,
+                programme: {
+                  programmeCode: courseAlloc.programmeCode,
+                  ...(courseAlloc.section ? { section: courseAlloc.section } : {})
+                }
+              }
+            })
+
+            if (!course) {
+              errors.push(
+                `${facultyId}: Course ${courseAlloc.courseCode} not found in ${courseAlloc.programmeCode}` +
+                (courseAlloc.section ? ` Section ${courseAlloc.section}` : '') +
+                ` Sem ${courseAlloc.semester}`
+              )
+              continue
+            }
+
+            // Check if allocation already exists
+            const existingAlloc = await prisma.courseAllocation.findFirst({
+              where: {
+                courseId: course.id,
+                facultyId: faculty.id
+              }
+            })
+
+            if (existingAlloc) {
+              // Update role if different
+              if (existingAlloc.role !== courseAlloc.role) {
+                await prisma.courseAllocation.update({
+                  where: { id: existingAlloc.id },
+                  data: { role: courseAlloc.role as any }
+                })
+                allocatedCount++
+              }
+            } else {
+              // Create new allocation
+              await prisma.courseAllocation.create({
+                data: {
+                  courseId: course.id,
+                  facultyId: faculty.id,
+                  role: courseAlloc.role as any
+                }
+              })
+              allocatedCount++
+            }
+          } catch (allocError: any) {
+            errors.push(`${facultyId}: Error allocating ${courseAlloc.courseCode} - ${allocError.message}`)
+          }
+        }
+      } catch (error: any) {
+        console.error(`Error processing faculty ${facultyId}:`, error)
+        errors.push(`${facultyId}: ${error.message}`)
+      }
+    }
 
     revalidatePath('/admin/faculty')
-    return { success: true, count: facultyData.length }
+
+    let message = `Successfully processed ${createdCount + updatedCount} faculty members. `
+    if (createdCount > 0) message += `${createdCount} created. `
+    if (updatedCount > 0) message += `${updatedCount} updated. `
+    if (allocatedCount > 0) message += `${allocatedCount} course allocations created/updated.`
+
+    if (errors.length > 0) {
+      const errorList = errors.slice(0, 10).join('\n')
+      const moreText = errors.length > 10 ? `\n... and ${errors.length - 10} more errors` : ''
+      message += `\n\nErrors (${errors.length}):\n${errorList}${moreText}`
+    }
+
+    return {
+      success: true,
+      message,
+      stats: {
+        total: facultyMap.size,
+        created: createdCount,
+        updated: updatedCount,
+        allocated: allocatedCount,
+        errors: errors.length
+      },
+      errors: errors.length > 0 ? errors : undefined
+    }
   } catch (error: any) {
     console.error('Bulk upload faculty error:', error)
-    return { success: false, error: error.message || 'Failed to upload faculty. Check your data format.' }
+    return { 
+      success: false, 
+      error: error.message || 'Failed to upload faculty. Check your data format.' 
+    }
   }
 }
 
-// ✅ NEW: Bulk upload faculty allocations with programme code
 export async function bulkUploadFacultyAllocations(data: any[]) {
   try {
     const allFaculty = await prisma.faculty.findMany({
@@ -700,10 +925,10 @@ export async function bulkUploadFacultyAllocations(data: any[]) {
     const failedAllocations: { row: number; reason: string }[] = []
 
     data.forEach((row, index) => {
-      const facultyId = row['Faculty ID'] || ''
-      const courseCode = row['Course Code'] || ''
-      const programmeCode = row['Programme Code'] || ''
-      const role = row['Role'] || 'CONTRIBUTOR'
+      const facultyId = safeString(row['Faculty ID'])
+      const courseCode = safeString(row['Course Code'])
+      const programmeCode = safeString(row['Programme Code'])
+      const role = safeString(row['Role'] || 'CONTRIBUTOR')
 
       if (!facultyId) {
         failedAllocations.push({ row: index + 1, reason: 'Missing Faculty ID' })
@@ -775,10 +1000,35 @@ export async function bulkUploadFacultyAllocations(data: any[]) {
       success: true, 
       count: result.count,
       message,
-      failedCount: failedAllocations.length
+      failedCount: failedAllocations.length,
+      stats: {
+        total: validAllocations.length,
+        success: result.count,
+        errors: failedAllocations.length
+      }
     }
   } catch (error: any) {
     console.error('Bulk upload faculty allocations error:', error)
     return { success: false, error: error.message || 'Failed to upload allocations.' }
+  }
+}
+
+// ============================================
+// STUDENT BULK UPLOAD (Placeholder)
+// ============================================
+
+export async function bulkUploadStudents(data: any[]) {
+  try {
+    // TODO: Implement student bulk upload
+    return {
+      success: false,
+      error: 'Student bulk upload not yet implemented'
+    }
+  } catch (error: any) {
+    console.error('Bulk upload students error:', error)
+    return { 
+      success: false, 
+      error: error.message || 'Failed to upload students.' 
+    }
   }
 }

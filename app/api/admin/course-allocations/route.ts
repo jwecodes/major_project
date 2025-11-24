@@ -1,8 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import prisma from '@/lib/prisma'
 
 export async function GET() {
   try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const allocations = await prisma.courseAllocation.findMany({
       include: {
         faculty: {
@@ -12,7 +20,17 @@ export async function GET() {
             email: true,
             designation: true
           }
+        },
+        course: {
+          select: {
+            id: true,
+            courseCode: true,
+            courseName: true
+          }
         }
+      },
+      orderBy: {
+        createdAt: 'desc'
       }
     })
 
@@ -21,9 +39,9 @@ export async function GET() {
       allocations
     })
   } catch (error) {
-    console.error('Get allocations error:', error)
+    console.error('Error fetching allocations:', error)
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch allocations' },
+      { error: 'Failed to fetch allocations' },
       { status: 500 }
     )
   }

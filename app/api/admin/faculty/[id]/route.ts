@@ -1,155 +1,147 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import prisma from '@/lib/prisma'
 
-// ✅ GET METHOD - This must be present!
+// GET single faculty
 export async function GET(
-  request: NextRequest,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
 
-    console.log('👤 Fetching faculty with ID:', id) // Debug log
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const faculty = await prisma.faculty.findUnique({
-      where: { id },
-      include: {
-        courseAllocations: {
-          include: {
-            course: {
-              include: {
-                programme: true
-              }
-            }
-          }
-        }
-      }
+      where: { id: params.id }
     })
 
     if (!faculty) {
-      console.log('❌ Faculty not found with ID:', id) // Debug log
-      return NextResponse.json(
-        { success: false, error: 'Faculty not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Faculty not found' }, { status: 404 })
     }
-
-    console.log('✅ Faculty found:', faculty.name) // Debug log
 
     return NextResponse.json({
       success: true,
       faculty
     })
-  } catch (error: any) {
-    console.error('❌ Get faculty error:', error)
+  } catch (error) {
+    console.error('Error fetching faculty:', error)
     return NextResponse.json(
-      { success: false, error: error.message },
+      { error: 'Failed to fetch faculty' },
       { status: 500 }
     )
   }
 }
 
+// ... PUT and DELETE methods you already have
+
+
+// PUT - Update faculty
 export async function PUT(
-  request: NextRequest,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params
-    const body = await request.json()
-    const {
-      name,
-      designation,
-      email,
-      contactNo,
-      department,
-      programmeId
-    } = body
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
 
-    if (!name || !designation || !email) {
-      return NextResponse.json(
-        { success: false, error: 'Missing required fields' },
-        { status: 400 }
-      )
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const faculty = await prisma.faculty.findUnique({
-      where: { id }
+    const userRoles = await prisma.userRole.findMany({
+      where: { userId: user.id, isActive: true },
+      select: { role: true }
     })
 
-    if (!faculty) {
-      return NextResponse.json(
-        { success: false, error: 'Faculty not found' },
-        { status: 404 }
-      )
+    if (!userRoles.some(r => r.role === 'ADMIN')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const updatedFaculty = await prisma.faculty.update({
-      where: { id },
+    const body = await request.json()
+    const { facultyId, name, designation, email, contactNo, department, courses } = body
+
+    // Update faculty
+    const faculty = await prisma.faculty.update({
+      where: { id: params.id },
       data: {
+        facultyId,
         name,
         designation,
         email,
         contactNo: contactNo || null,
         department: department || null,
-        programmeId: programmeId || null
-      },
-      include: {
-        courseAllocations: {
-          include: {
-            course: {
-              include: {
-                programme: true
-              }
-            }
-          }
-        }
       }
     })
 
+    // Update course allocations
+    if (courses && Array.isArray(courses)) {
+      // Delete existing allocations
+      await prisma.courseAllocation.deleteMany({
+        where: { facultyId: params.id }
+      })
+
+      // Create new allocations
+      if (courses.length > 0) {
+        await prisma.courseAllocation.createMany({
+          data: courses.map((c: any) => ({
+            facultyId: params.id,
+            courseId: c.courseId,
+            role: c.role
+          }))
+        })
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      faculty: updatedFaculty,
-      message: 'Faculty updated successfully'
+      faculty
     })
-  } catch (error: any) {
-    console.error('Update faculty error:', error)
+  } catch (error) {
+    console.error('Error updating faculty:', error)
     return NextResponse.json(
-      { success: false, error: error.message },
+      { error: 'Failed to update faculty' },
       { status: 500 }
     )
   }
 }
 
+// DELETE - Delete faculty
 export async function DELETE(
-  request: NextRequest,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
 
-    const faculty = await prisma.faculty.findUnique({
-      where: { id }
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const userRoles = await prisma.userRole.findMany({
+      where: { userId: user.id, isActive: true },
+      select: { role: true }
     })
 
-    if (!faculty) {
-      return NextResponse.json(
-        { success: false, error: 'Faculty not found' },
-        { status: 404 }
-      )
+    if (!userRoles.some(r => r.role === 'ADMIN')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     await prisma.faculty.delete({
-      where: { id }
+      where: { id: params.id }
     })
 
     return NextResponse.json({
-      success: true,
-      message: 'Faculty deleted successfully'
+      success: true
     })
-  } catch (error: any) {
-    console.error('Delete faculty error:', error)
+  } catch (error) {
+    console.error('Error deleting faculty:', error)
     return NextResponse.json(
-      { success: false, error: error.message },
+      { error: 'Failed to delete faculty' },
       { status: 500 }
     )
   }

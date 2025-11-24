@@ -1,415 +1,155 @@
-// import { NextRequest, NextResponse } from 'next/server'
-// import { prisma } from '@/lib/prisma'
-// import { supabase } from '@/lib/supabase'
-// import { ContentType } from '@prisma/client'
-
-// // GET - Fetch faculty's content
-// export async function GET(request: NextRequest) {
-//   try {
-//     const email = request.nextUrl.searchParams.get('email')
-
-//     if (!email) {
-//       return NextResponse.json({ success: false, error: 'Email required' }, { status: 400 })
-//     }
-
-//     const faculty = await prisma.faculty.findUnique({
-//       where: { email }
-//     })
-
-//     if (!faculty) {
-//       return NextResponse.json({ success: false, error: 'Faculty not found' }, { status: 404 })
-//     }
-
-//     const content = await prisma.teachingContent.findMany({
-//       where: { facultyId: faculty.id },
-//       include: {
-//         course: {
-//           select: {
-//             courseCode: true,
-//             courseName: true
-//           }
-//         }
-//       },
-//       orderBy: { createdAt: 'desc' }
-//     })
-
-//     // Generate public URLs for all content
-//     const contentWithUrls = content.map(item => {
-//       const { data } = supabase.storage
-//         .from('teaching-content')
-//         .getPublicUrl(item.filePath)
-
-//       return {
-//         id: item.id,
-//         title: item.title,
-//         fileName: item.fileName,
-//         filePath: item.filePath,
-//         contentType: item.contentType,
-//         lectureNumber: item.lectureNumber,
-//         description: item.description,
-//         fileSize: item.fileSize,
-//         approvalStatus: item.approvalStatus,
-//         coordinatorNotes: item.coordinatorNotes,
-//         uploadDate: item.createdAt.toISOString(),
-//         fileUrl: data.publicUrl,
-//         courseId: item.courseId,
-//         course: item.course
-//       }
-//     })
-
-//     return NextResponse.json({ success: true, content: contentWithUrls })
-//   } catch (error) {
-//     console.error('Error fetching content:', error)
-//     return NextResponse.json({ success: false, error: 'Error fetching content' }, { status: 500 })
-//   }
-// }
-
-// // POST - Upload new content
-// export async function POST(request: NextRequest) {
-//   try {
-//     const formData = await request.formData()
-//     const email = formData.get('email') as string
-//     const courseId = formData.get('courseId') as string
-//     const contentTypeString = formData.get('contentType') as string
-//     const title = formData.get('title') as string
-//     const lectureNumber = formData.get('lectureNumber')
-//     const assignmentNumber = formData.get('assignmentNumber')
-//     const description = formData.get('description') as string
-//     const file = formData.get('file') as File
-
-//     console.log('📤 Upload request from:', email)
-
-//     if (!email || !courseId || !title || !file) {
-//       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 })
-//     }
-
-//     // Validate content type
-//     const validContentTypes: ContentType[] = [
-//       'COURSE_HANDOUT',
-//       'LECTURE_PPT',
-//       'ASSIGNMENT',
-//       'QUESTION_BANK',
-//       'QUESTION_PAPER',
-//       'LAB_MANUAL',
-//       'REFERENCE_MATERIAL'
-//     ]
-
-//     if (!validContentTypes.includes(contentTypeString as ContentType)) {
-//       return NextResponse.json({ success: false, error: 'Invalid content type' }, { status: 400 })
-//     }
-
-//     const contentType: ContentType = contentTypeString as ContentType
-
-//     // Find faculty
-//     const faculty = await prisma.faculty.findUnique({
-//       where: { email }
-//     })
-
-//     if (!faculty) {
-//       return NextResponse.json({ success: false, error: 'Faculty not found' }, { status: 404 })
-//     }
-
-//     // Generate clean file path
-//     const timestamp = Date.now()
-//     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
-//     const filePath = `${faculty.id}/${courseId}/${timestamp}-${sanitizedFileName}`
-
-//     console.log('📁 Uploading to:', filePath)
-
-//     // Upload to Supabase Storage
-//     const fileBuffer = await file.arrayBuffer()
-//     const { data: uploadData, error: uploadError } = await supabase.storage
-//       .from('teaching-content')
-//       .upload(filePath, fileBuffer, {
-//         contentType: file.type,
-//         upsert: false
-//       })
-
-//     if (uploadError) {
-//       console.error('❌ Upload error:', uploadError)
-//       return NextResponse.json({ 
-//         success: false, 
-//         error: 'Failed to upload file',
-//         details: uploadError.message 
-//       }, { status: 500 })
-//     }
-
-//     console.log('✅ File uploaded:', uploadData.path)
-
-//     // Determine lecture/assignment number
-//     let finalLectureNumber = null
-//     if (lectureNumber) {
-//       finalLectureNumber = parseInt(lectureNumber as string)
-//     } else if (assignmentNumber && contentType === 'ASSIGNMENT') {
-//       finalLectureNumber = parseInt(assignmentNumber as string)
-//     }
-
-//     // Create database record
-//     const content = await prisma.teachingContent.create({
-//       data: {
-//         title,
-//         fileName: file.name,
-//         filePath: uploadData.path,
-//         contentType,
-//         lectureNumber: finalLectureNumber,
-//         description: description || null,
-//         fileSize: file.size,
-//         mimeType: file.type,
-//         approvalStatus: 'PENDING',
-//         courseId,
-//         facultyId: faculty.id
-//       },
-//       include: {
-//         course: {
-//           select: {
-//             courseCode: true,
-//             courseName: true
-//           }
-//         }
-//       }
-//     })
-
-//     console.log('✅ Database record created:', content.id)
-
-//     // Get public URL
-//     const { data: urlData } = supabase.storage
-//       .from('teaching-content')
-//       .getPublicUrl(uploadData.path)
-
-//     return NextResponse.json({ 
-//       success: true, 
-//       content: {
-//         id: content.id,
-//         title: content.title,
-//         fileName: content.fileName,
-//         contentType: content.contentType,
-//         approvalStatus: content.approvalStatus,
-//         uploadDate: content.createdAt.toISOString(),
-//         fileUrl: urlData.publicUrl
-//       },
-//       message: 'Content uploaded successfully!'
-//     })
-//   } catch (error) {
-//     console.error('❌ Upload error:', error)
-//     return NextResponse.json({ 
-//       success: false, 
-//       error: 'Error uploading content',
-//       details: error instanceof Error ? error.message : 'Unknown error'
-//     }, { status: 500 })
-//   }
-// }
-
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { supabase } from '@/lib/supabase'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { ContentType } from '@prisma/client'
+import prisma from '@/lib/prisma'
 
-// GET - Fetch faculty's content
+// ======================================
+// GET: List all teaching content for a faculty (for My Submissions)
+// ======================================
+
 export async function GET(request: NextRequest) {
   try {
-    // Get authenticated user from session
-    const supabaseServer = await createServerSupabaseClient()
-    const { data: { user }, error: authError } = await supabaseServer.auth.getUser()
-    
-    if (authError || !user || !user.email) {
-      return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 })
+    const email = request.nextUrl.searchParams.get('email')
+
+    if (!email) {
+      return NextResponse.json(
+        { success: false, error: 'Email required' },
+        { status: 400 }
+      )
     }
 
-    const safeEmail = user.email.trim().toLowerCase()
-
     const faculty = await prisma.faculty.findUnique({
-      where: { email: safeEmail }
+      where: { email: email.toLowerCase().trim() },
     })
 
     if (!faculty) {
-      return NextResponse.json({ success: false, error: 'Faculty not found' }, { status: 404 })
+      return NextResponse.json(
+        { success: false, error: 'Faculty not found' },
+        { status: 404 }
+      )
     }
 
-    const content = await prisma.teachingContent.findMany({
-      where: { facultyId: faculty.id },
+    const contents = await prisma.teachingContent.findMany({
+      where: {
+        facultyId: faculty.id,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
       include: {
         course: {
           select: {
             courseCode: true,
-            courseName: true
-          }
-        }
+            courseName: true,
+          },
+        },
       },
-      orderBy: { createdAt: 'desc' }
     })
 
-    // Generate public URLs for all content
-    const contentWithUrls = content.map(item => {
-      const { data } = supabase.storage
-        .from('teaching-content')
-        .getPublicUrl(item.filePath)
+    // Shape it to match your Submissions page ContentItem interface
+    const mapped = contents.map(c => ({
+      id: c.id,
+      title: c.title,
+      contentType: c.contentType,
+      fileName: c.fileName,
+      filePath: c.filePath,
+      fileUrl: c.filePath,        // 👈 frontend uses this to view/download
+      fileSize: c.fileSize,
+      approvalStatus: c.approvalStatus,
+      coordinatorNotes: c.coordinatorNotes,
+      lectureNumber: c.lectureNumber,
+      courseId: c.courseId,
+      uploadDate: c.createdAt,    // 👈 frontend does new Date(uploadDate)
+      course: c.course,
+    }))
 
-      return {
-        id: item.id,
-        title: item.title,
-        fileName: item.fileName,
-        filePath: item.filePath,
-        contentType: item.contentType,
-        lectureNumber: item.lectureNumber,
-        description: item.description,
-        fileSize: item.fileSize,
-        approvalStatus: item.approvalStatus,
-        coordinatorNotes: item.coordinatorNotes,
-        uploadDate: item.createdAt.toISOString(),
-        fileUrl: data.publicUrl,
-        courseId: item.courseId,
-        course: item.course
-      }
+    return NextResponse.json({
+      success: true,
+      content: mapped,
     })
-
-    return NextResponse.json({ success: true, content: contentWithUrls })
   } catch (error) {
-    console.error('Error fetching content:', error)
-    return NextResponse.json({ success: false, error: 'Error fetching content' }, { status: 500 })
+    console.error('Error fetching faculty content:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error fetching content' },
+      { status: 500 }
+    )
   }
 }
 
-// POST - Upload new content
-export async function POST(request: NextRequest) {
+// ======================================
+// POST: Create new teaching content (Upload + Revisions)
+// ======================================
+
+export async function POST(request: Request) {
   try {
-    // Get authenticated user from session
-    const supabaseServer = await createServerSupabaseClient()
-    const { data: { user }, error: authError } = await supabaseServer.auth.getUser()
-    
-    if (authError || !user || !user.email) {
-      return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 })
+    const body = await request.json()
+    let {
+      title,
+      contentType,
+      fileName,
+      filePath,
+      fileSize,
+      mimeType,
+      courseId,
+      facultyId,     // optional
+      facultyEmail,  // optional – preferred in new code
+      description,
+      lectureNumber,
+      updatedFromId,
+    } = body
+
+    // Basic required fields (faculty resolved below)
+    if (!title || !contentType || !fileName || !filePath || !courseId) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required fields' },
+        { status: 400 }
+      )
     }
 
-    const safeEmail = user.email.trim().toLowerCase()
-
-    const formData = await request.formData()
-    const courseId = formData.get('courseId') as string
-    const contentTypeString = formData.get('contentType') as string
-    const title = formData.get('title') as string
-    const lectureNumber = formData.get('lectureNumber')
-    const assignmentNumber = formData.get('assignmentNumber')
-    const description = formData.get('description') as string
-    const file = formData.get('file') as File
-
-    console.log('📤 Upload request from:', safeEmail)
-
-    if (!courseId || !title || !file) {
-      return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 })
-    }
-
-    // Validate content type
-    const validContentTypes: ContentType[] = [
-      'COURSE_HANDOUT',
-      'LECTURE_PPT',
-      'ASSIGNMENT',
-      'QUESTION_BANK',
-      'QUESTION_PAPER',
-      'LAB_MANUAL',
-      'REFERENCE_MATERIAL'
-    ]
-
-    if (!validContentTypes.includes(contentTypeString as ContentType)) {
-      return NextResponse.json({ success: false, error: 'Invalid content type' }, { status: 400 })
-    }
-
-    const contentType: ContentType = contentTypeString as ContentType
-
-    // Find faculty by authenticated email
-    const faculty = await prisma.faculty.findUnique({
-      where: { email: safeEmail }
-    })
-
-    if (!faculty) {
-      return NextResponse.json({ success: false, error: 'Faculty not found' }, { status: 404 })
-    }
-
-    // Generate clean file path
-    const timestamp = Date.now()
-    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
-    const filePath = `${faculty.id}/${courseId}/${timestamp}-${sanitizedFileName}`
-
-    console.log('📁 Uploading to:', filePath)
-
-    // Upload to Supabase Storage
-    const fileBuffer = await file.arrayBuffer()
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('teaching-content')
-      .upload(filePath, fileBuffer, {
-        contentType: file.type,
-        upsert: false
+    // Resolve facultyId if not provided, using email
+    if (!facultyId && facultyEmail) {
+      const faculty = await prisma.faculty.findUnique({
+        where: { email: facultyEmail.toLowerCase().trim() },
       })
 
-    if (uploadError) {
-      console.error('❌ Upload error:', uploadError)
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Failed to upload file',
-        details: uploadError.message 
-      }, { status: 500 })
+      if (!faculty) {
+        return NextResponse.json(
+          { success: false, error: 'Faculty not found for this email' },
+          { status: 404 }
+        )
+      }
+
+      facultyId = faculty.id
     }
 
-    console.log('✅ File uploaded:', uploadData.path)
-
-    // Determine lecture/assignment number
-    let finalLectureNumber = null
-    if (lectureNumber) {
-      finalLectureNumber = parseInt(lectureNumber as string)
-    } else if (assignmentNumber && contentType === 'ASSIGNMENT') {
-      finalLectureNumber = parseInt(assignmentNumber as string)
+    if (!facultyId) {
+      return NextResponse.json(
+        { success: false, error: 'Faculty ID or faculty email is required' },
+        { status: 400 }
+      )
     }
 
-    // Create database record
     const content = await prisma.teachingContent.create({
       data: {
         title,
-        fileName: file.name,
-        filePath: uploadData.path,
         contentType,
-        lectureNumber: finalLectureNumber,
-        description: description || null,
-        fileSize: file.size,
-        mimeType: file.type,
-        approvalStatus: 'PENDING',
+        fileName,
+        filePath,
+        fileSize: fileSize || null,
+        mimeType: mimeType || null,
         courseId,
-        facultyId: faculty.id
+        facultyId, // ✅ now guaranteed to be a valid FK
+        description: description || null,
+        lectureNumber: lectureNumber || null,
+        approvalStatus: 'PENDING',
+        updatedFromId: updatedFromId || null,
       },
-      include: {
-        course: {
-          select: {
-            courseCode: true,
-            courseName: true
-          }
-        }
-      }
     })
 
-    console.log('✅ Database record created:', content.id)
-
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from('teaching-content')
-      .getPublicUrl(uploadData.path)
-
-    return NextResponse.json({ 
-      success: true, 
-      content: {
-        id: content.id,
-        title: content.title,
-        fileName: content.fileName,
-        contentType: content.contentType,
-        approvalStatus: content.approvalStatus,
-        uploadDate: content.createdAt.toISOString(),
-        fileUrl: urlData.publicUrl
-      },
-      message: 'Content uploaded successfully!'
-    })
+    return NextResponse.json({ success: true, content })
   } catch (error) {
-    console.error('❌ Upload error:', error)
-    return NextResponse.json({ 
-      success: false, 
-      error: 'Error uploading content',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
+    console.error('Content creation error:', error)
+    return NextResponse.json(
+      { success: false, error: 'Failed to create content' },
+      { status: 500 }
+    )
   }
 }

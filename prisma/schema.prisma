@@ -1,26 +1,33 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
 // ============================================
-// USER & ROLE MANAGEMENT (Role-Based Access)
+// USER & ROLE MANAGEMENT (Multi-Role Support)
 // ============================================
 
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
   name      String
-  role      Role     @default(STUDENT)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // ✅ REMOVED: Single role field (now using UserRole for multi-role)
   // Relationships
+  roles    UserRole[]  // ✅ NEW: Multi-role support
   faculty  Faculty?
   student  Student?
 
@@ -31,6 +38,24 @@ enum Role {
   ADMIN
   FACULTY
   STUDENT
+}
+
+// ✅ UPDATED: Simplified multi-role model
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String
+  role      Role
+  isActive  Boolean  @default(true)  // ✅ NEW: Ability to deactivate roles
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([userId])
+  @@index([role])
+  @@map("user_roles")
 }
 
 // ============================================
@@ -52,21 +77,20 @@ model Programme {
   // Relationships
   courses  Course[]
   students Student[]
-  faculty  Faculty[]  // ✅ ADD THIS
+  faculty  Faculty[]
 
-  // Make combination of session, programmeCode, and section unique
   @@unique([session, programmeCode, section])
   @@map("programmes")
 }
 
-// Add this new model in schema.prisma
+// ============================================
+// LESSON PLAN MANAGEMENT
+// ============================================
 
 model LessonPlan {
   id            String   @id @default(uuid())
   courseId      String
-  course        Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
   facultyId     String
-  faculty       Faculty  @relation(fields: [facultyId], references: [id], onDelete: Cascade)
   
   // Lesson plan fields
   title         String
@@ -77,14 +101,26 @@ model LessonPlan {
   description   String?
   
   // Status
-  status        String   @default("DRAFT") // DRAFT, SUBMITTED, APPROVED
+  status        LessonPlanStatus @default(DRAFT)
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  // Relationships
+  course        Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  faculty       Faculty  @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+
   @@index([courseId])
   @@index([facultyId])
   @@index([status])
+  @@map("lesson_plans")
+}
+
+enum LessonPlanStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
 }
 
 // ============================================
@@ -92,7 +128,7 @@ model LessonPlan {
 // ============================================
 
 model CourseHandout {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   facultyId String
   courseId  String
   status    CHOStatus @default(DRAFT)
@@ -140,50 +176,50 @@ enum CHOStatus {
   REJECTED
 }
 
-
 // ============================================
 // COURSE MANAGEMENT
 // ============================================
 
 model Course {
-  id           String      @id @default(uuid())
-  session      String      // e.g., "2024-2025"
+  id           String         @id @default(uuid())
+  session      String         // e.g., "2024-2025"
   programmeId  String
-  semester     Int         // 1-8
+  semester     Int            // 1-8
   courseCode   String
   courseName   String
   
   // L-T-P-S Credits System
-  l            Int         @default(0) // Lecture hours
-  t            Int         @default(0) // Tutorial hours
-  p            Int         @default(0) // Practical hours
-  s            Int         @default(0) // Self-study hours
-  credits      Int         // Total credits
-  totalHours   Int         // Total contact hours per week
+  l            Int            @default(0) // Lecture hours
+  t            Int            @default(0) // Tutorial hours
+  p            Int            @default(0) // Practical hours
+  s            Int            @default(0) // Self-study hours
+  credits      Int            // Total credits
+  totalHours   Int            // Total contact hours per week
   
   // Course Details
-  courseType   CourseType  // ✅ CHANGED: Now academic type
-  deliveryMode DeliveryMode @default(THEORY) // ✅ NEW: Theory/Practical/Both
+  courseType   CourseType     // Academic type
+  deliveryMode DeliveryMode   @default(THEORY) // Theory/Practical/Both
   roomNo       String?
-  attendance   Boolean     @default(true)
+  attendance   Boolean        @default(true)
   category     CourseCategory // MANDATORY/ELECTIVE
   
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
   // Relationships
   programme          Programme            @relation(fields: [programmeId], references: [id], onDelete: Cascade)
   courseAllocations  CourseAllocation[]
   teachingContents   TeachingContent[]
   studentEnrollments StudentEnrollment[]
-  lessonPlans       LessonPlan[]     // Add this
+  lessonPlans        LessonPlan[]
   courseHandouts     CourseHandout[]
 
   @@unique([session, courseCode, programmeId])
+  @@index([programmeId])
+  @@index([session])
   @@map("courses")
 }
 
-// ✅ NEW: Academic Course Types
 enum CourseType {
   CORE              // Core Course
   SEC               // Skill Enhancement Course
@@ -200,7 +236,6 @@ enum CourseType {
   OTHER             // Other (define in description)
 }
 
-// ✅ NEW: Delivery Mode
 enum DeliveryMode {
   THEORY            // Theory only
   PRACTICAL         // Practical/Lab only
@@ -212,32 +247,33 @@ enum CourseCategory {
   ELECTIVE
 }
 
-
 // ============================================
-// FACULTY MANAGEMENT (UPDATED)
+// FACULTY MANAGEMENT
 // ============================================
 
 model Faculty {
   id          String   @id @default(uuid())
   userId      String   @unique
-  facultyId   String   @unique          // ✅ CHANGED: Now unique by itself (not with session)
+  facultyId   String   @unique
   name        String
   designation String   // Professor, Assistant Professor, etc.
   email       String   @unique
-  contactNo   String?  // ✅ CHANGED: Now optional
+  contactNo   String?
   department  String?
-  programmeId String?  // ✅ NEW: Link to programme instead of session
+  programmeId String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relationships
-  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  programme          Programme?           @relation(fields: [programmeId], references: [id], onDelete: SetNull)
-  courseAllocations  CourseAllocation[]
-  teachingContents   TeachingContent[]
-  lessonPlans       LessonPlan[]     // Add this
-  courseHandouts     CourseHandout[]
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programme         Programme?           @relation(fields: [programmeId], references: [id], onDelete: SetNull)
+  courseAllocations CourseAllocation[]
+  teachingContents  TeachingContent[]
+  lessonPlans       LessonPlan[]
+  courseHandouts    CourseHandout[]
 
+  @@index([userId])
+  @@index([programmeId])
   @@map("faculty")
 }
 
@@ -246,18 +282,20 @@ model Faculty {
 // ============================================
 
 model CourseAllocation {
-  id         String               @id @default(uuid())
-  courseId   String
-  facultyId  String
-  role       FacultyCourseRole    @default(CONTRIBUTOR)
-  createdAt  DateTime             @default(now())
-  updatedAt  DateTime             @updatedAt
+  id        String            @id @default(uuid())
+  courseId  String
+  facultyId String
+  role      FacultyCourseRole @default(CONTRIBUTOR)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
 
   // Relationships
   course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
   faculty Faculty @relation(fields: [facultyId], references: [id], onDelete: Cascade)
 
   @@unique([courseId, facultyId])
+  @@index([courseId])
+  @@index([facultyId])
   @@map("course_allocations")
 }
 
@@ -271,31 +309,39 @@ enum FacultyCourseRole {
 // ============================================
 
 model TeachingContent {
-  id              String            @id @default(uuid())
+  id              String         @id @default(uuid())
   courseId        String
   facultyId       String
   contentType     ContentType
   title           String
   description     String?
-  lectureNumber   Int?              // For lecture PPTs
+  lectureNumber   Int?           // For lecture PPTs
   
   // Supabase Storage Info
-  filePath        String            // Path in Supabase Storage
+  filePath        String         // Path in Supabase Storage
   fileName        String
-  fileSize        Int?              // in bytes
+  fileSize        Int?           // in bytes
   mimeType        String?
-  
+
   // Approval Workflow
-  approvalStatus  ApprovalStatus    @default(PENDING)
-  coordinatorNotes String?
-  
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  approvalStatus  ApprovalStatus @default(PENDING)
+  coordinatorNotes String?       @db.Text
+
+  // Revision workflow (NEW)
+  updatedFromId   String?        // If this is a revision, link to the previous version
+  previousVersion TeachingContent? @relation("RevisionChain", fields: [updatedFromId], references: [id])
+  revisions       TeachingContent[] @relation("RevisionChain")
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   // Relationships
   course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
   faculty Faculty @relation(fields: [facultyId], references: [id], onDelete: Cascade)
 
+  @@index([courseId])
+  @@index([facultyId])
+  @@index([approvalStatus])
   @@map("teaching_contents")
 }
 
@@ -309,7 +355,6 @@ enum ContentType {
   LAB_ASSIGNMENT      // Lab Assignments
   REFERENCE_MATERIAL  // Reference Materials
 }
-
 
 enum ApprovalStatus {
   PENDING
@@ -340,6 +385,8 @@ model Student {
   programme   Programme           @relation(fields: [programmeId], references: [id], onDelete: Cascade)
   enrollments StudentEnrollment[]
 
+  @@index([userId])
+  @@index([programmeId])
   @@map("students")
 }
 
@@ -360,5 +407,7 @@ model StudentEnrollment {
   course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, courseId])
+  @@index([studentId])
+  @@index([courseId])
   @@map("student_enrollments")
 }

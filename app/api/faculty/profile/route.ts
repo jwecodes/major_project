@@ -1,59 +1,36 @@
-// import { NextRequest, NextResponse } from 'next/server'
-// import { prisma } from '@/lib/prisma'
-// import { createServerSupabaseClient } from '@/lib/supabase-server'
-
-// export async function GET(request: NextRequest) {
-//   const supabase = await createServerSupabaseClient()
-//   const { data: { user }, error } = await supabase.auth.getUser()
-//   if (error || !user || !user.email)
-//     return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 })
-
-//   const safeEmail = user.email.trim().toLowerCase()
-
-//   const faculty = await prisma.faculty.findUnique({
-//     where: { email: safeEmail },
-//     select: {
-//       id: true,
-//       name: true,
-//       email: true,
-//       facultyId: true,
-//       designation: true,
-//       department: true
-//     }
-//   })
-
-//   if (!faculty)
-//     return NextResponse.json({ success: false, error: "Faculty not found" }, { status: 404 })
-
-//   return NextResponse.json({ success: true, profile: faculty })
-// }
-
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createClient } from '@/lib/supabase/server'
+import prisma from '@/lib/prisma'
 
 export async function GET() {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user }, error } = await supabase.auth.getUser()
-  if (error || !user || !user.email)
-    return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 })
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
 
-  const safeEmail = user.email.trim().toLowerCase()
-  const faculty = await prisma.faculty.findUnique({
-    where: { email: safeEmail },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      facultyId: true,
-      designation: true,
-      department: true
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-  })
 
-  if (!faculty)
-    return NextResponse.json({ success: false, error: "Faculty not found" }, { status: 404 })
+    const faculty = await prisma.faculty.findUnique({
+      where: { userId: user.id }
+    })
 
-  return NextResponse.json({ success: true, profile: faculty })
+    if (!faculty) {
+      return NextResponse.json(
+        { success: false, error: 'Faculty profile not found' },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      profile: faculty
+    })
+  } catch (error) {
+    console.error('Error fetching faculty profile:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch profile' },
+      { status: 500 }
+    )
+  }
 }
-

@@ -1,21 +1,50 @@
-'use client'
+import { signOut } from '@/app/actions/auth'
+import RoleSwitcher from '@/components/RoleSwitcher'
+import { LogOut } from 'lucide-react'
+import type { Role } from '@prisma/client'
 
-export default function Header() {
+interface HeaderProps {
+  user: {
+    id: string
+    email: string
+    name: string
+    roles: Role[]   // 👈 use Prisma Role enum so it matches RoleSwitcher
+  }
+}
+
+export default function Header({ user }: HeaderProps) {
   return (
-    <header className="bg-white shadow-sm">
-      <div className="flex items-center justify-between px-6 py-4">
+    <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+      <div className="flex justify-between items-center">
+        {/* Left: Title + Greeting */}
         <div>
-          <h2 className="text-xl font-semibold text-gray-800">
-            Teaching Content Management System
-          </h2>
+          <h2 className="text-2xl font-bold text-gray-900">Admin Dashboard</h2>
+          <p className="text-sm text-gray-600">
+            Welcome, {user.name}{' '}
+            <span className="text-xs text-gray-400">({user.email})</span>
+          </p>
         </div>
-        <div className="flex items-center space-x-4">
-          <div className="text-sm text-gray-600">
-            Admin User
-          </div>
-          <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold">
-            A
-          </div>
+
+        {/* Right: Role switcher (multi-role only) + Logout */}
+        <div className="flex items-center gap-4">
+          {/* ✅ Only show if this user actually has multiple roles (multi-role email) */}
+          {user.roles.length > 1 && (
+            <RoleSwitcher
+              userRoles={user.roles}
+              currentRole="ADMIN"   // this is the admin header, so current role is ADMIN
+            />
+          )}
+
+          {/* Logout Button */}
+          <form action={signOut}>
+            <button
+              type="submit"
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </button>
+          </form>
         </div>
       </div>
     </header>

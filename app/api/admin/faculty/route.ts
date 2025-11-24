@@ -1,125 +1,133 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import prisma from '@/lib/prisma'
 
+// GET - List all faculty
 export async function GET() {
   try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Check if admin
+    const userRoles = await prisma.userRole.findMany({
+      where: { userId: user.id, isActive: true },
+      select: { role: true }
+    })
+
+    if (!userRoles.some(r => r.role === 'ADMIN')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const faculty = await prisma.faculty.findMany({
       include: {
-        user: {
+        _count: {
           select: {
-            email: true,
-            role: true
-          }
-        },
-        courseAllocations: {
-          include: {
-            course: {
-              include: {
-                programme: {
-                  select: {
-                    id: true,
-                    programmeCode: true,
-                    programmeName: true,
-                    section: true
-                  }
-                }
-              }
-            }
+            courseAllocations: true
           }
         }
       },
-      orderBy: { name: 'asc' }
+      orderBy: {
+        name: 'asc'
+      }
     })
 
-    return NextResponse.json({ success: true, faculty })
-  } catch (error: any) {
-    console.error('Get faculty error:', error)
+    return NextResponse.json({
+      success: true,
+      faculty
+    })
+  } catch (error) {
+    console.error('Error fetching faculty:', error)
     return NextResponse.json(
-      { success: false, error: error.message },
+      { error: 'Failed to fetch faculty' },
       { status: 500 }
     )
   }
 }
 
-export async function POST(request: NextRequest) {
+// POST - Create new faculty
+export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const {
-      facultyId,
-      name,
-      designation,
-      email,
-      contactNo,
-      department,
-      programmeId
-    } = body
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
 
-    // Validate required fields
-    if (!facultyId || !name || !designation || !email) {
-      return NextResponse.json(
-        { success: false, error: 'Missing required fields' },
-        { status: 400 }
-      )
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if faculty already exists
-    const existingFaculty = await prisma.faculty.findFirst({
-      where: {
-        OR: [{ facultyId }, { email }]
-      }
+    const userRoles = await prisma.userRole.findMany({
+      where: { userId: user.id, isActive: true },
+      select: { role: true }
     })
 
-    if (existingFaculty) {
-      return NextResponse.json(
-        { success: false, error: 'Faculty ID or Email already exists' },
-        { status: 400 }
-      )
+    if (!userRoles.some(r => r.role === 'ADMIN')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Check if user already exists or create new user
-    let user = await prisma.user.findUnique({
+    const body = await request.json()
+    const { facultyId, name, designation, email, contactNo, department, courses } = body
+
+    // Check if email already exists
+    const existingUser = await prisma.user.findUnique({
       where: { email }
     })
 
-    if (!user) {
-      user = await prisma.user.create({
+    let userId = existingUser?.id
+
+    // If user doesn't exist, create them
+    if (!existingUser) {
+      const newUser = await prisma.user.create({
         data: {
           email,
           name,
+        }
+      })
+      userId = newUser.id
+
+      // Assign FACULTY role
+      await prisma.userRole.create({
+        data: {
+          userId: newUser.id,
           role: 'FACULTY'
         }
       })
     }
 
-    // Create faculty
+    // Create faculty record
     const faculty = await prisma.faculty.create({
       data: {
-        userId: user.id,
+        userId: userId!,
         facultyId,
         name,
         designation,
         email,
         contactNo: contactNo || null,
         department: department || null,
-        programmeId: programmeId || null
-      },
-      include: {
-        courseAllocations: {
-          include: {
-            course: true
-          }
-        }
       }
     })
 
+    // Create course allocations if provided
+    if (courses && Array.isArray(courses) && courses.length > 0) {
+      await prisma.courseAllocation.createMany({
+        data: courses.map((c: any) => ({
+          facultyId: faculty.id,
+          courseId: c.courseId,
+          role: c.role
+        }))
+      })
+    }
+
+    return NextResponse.json({
+      success: true,
+      faculty
+    })
+  } catch (error) {
+    console.error('Error creating faculty:', error)
     return NextResponse.json(
-      { success: true, faculty, message: 'Faculty created successfully' },
-      { status: 201 }
-    )
-  } catch (error: any) {
-    console.error('Create faculty error:', error)
-    return NextResponse.json(
-      { success: false, error: error.message },
+      { error: 'Failed to create faculty' },
       { status: 500 }
     )
   }

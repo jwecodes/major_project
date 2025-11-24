@@ -1,61 +1,71 @@
-// import { NextRequest, NextResponse } from 'next/server'
-// import { prisma } from '@/lib/prisma'
+// app/api/student/courses/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import prisma from '@/lib/prisma'
 
-// export async function GET(request: NextRequest) {
-//   try {
-//     const { searchParams } = new URL(request.url)
-//     const studentId = searchParams.get('studentId')
+export async function GET(request: NextRequest) {
+  try {
+    const email = request.nextUrl.searchParams.get('email')
 
-//     if (!studentId) {
-//       return NextResponse.json(
-//         { success: false, error: 'Student ID required' },
-//         { status: 400 }
-//       )
-//     }
+    if (!email) {
+      return NextResponse.json(
+        { success: false, error: 'Email required' },
+        { status: 400 }
+      )
+    }
 
-//     const student = await prisma.student.findUnique({
-//       where: { id: studentId },
-//       include: { programme: true }
-//     })
+    const student = await prisma.student.findUnique({
+      where: { email: email.toLowerCase().trim() },
+    })
 
-//     if (!student) {
-//       return NextResponse.json(
-//         { success: false, error: 'Student not found' },
-//         { status: 404 }
-//       )
-//     }
+    if (!student) {
+      return NextResponse.json(
+        { success: false, error: 'Student not found' },
+        { status: 404 }
+      )
+    }
 
-//     // Get courses matching student's programme, semester, and session
-//     const courses = await prisma.course.findMany({
-//       where: {
-//         programmeId: student.programmeId,
-//         semester: student.currentSemester,
-//         session: student.programme.session
-//       }
-//     })
+    const enrollments = await prisma.studentEnrollment.findMany({
+      where: { studentId: student.id },
+      include: {
+        course: {
+          include: {
+            programme: true,
+          },
+        },
+      },
+      orderBy: {
+        course: {
+          courseCode: 'asc',
+        },
+      },
+    })
 
-//     // Get material count for each course
-//     const coursesWithCount = await Promise.all(
-//       courses.map(async (course: any) => {
-//         const materialCount = await prisma.teachingContent.count({
-//           where: {
-//             courseId: course.id,
-//             approvalStatus: 'APPROVED'
-//           }
-//         })
-//         return { ...course, materialCount }
-//       })
-//     )
+    const courses = enrollments.map(e => ({
+      id: e.course.id,
+      courseCode: e.course.courseCode,
+      courseName: e.course.courseName,
+      semester: e.course.semester,
+      session: e.course.session,
+      programmeName: e.course.programme?.programmeName ?? '',
+      programmeCode: e.course.programme?.programmeCode ?? '',
+    }))
 
-//     return NextResponse.json({
-//       success: true,
-//       courses: coursesWithCount
-//     })
-//   } catch (error) {
-//     console.error('Student courses error:', error)
-//     return NextResponse.json(
-//       { success: false, error: 'Failed to load courses' },
-//       { status: 500 }
-//     )
-//   }
-// }
+    return NextResponse.json({
+      success: true,
+      student: {
+        id: student.id,
+        name: student.name,
+        email: student.email,
+        currentSemester: student.currentSemester,
+        programmeId: student.programmeId,
+      },
+      courses,
+    })
+  } catch (error) {
+    console.error('Error fetching student courses:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error fetching courses' },
+      { status: 500 }
+    )
+  }
+}

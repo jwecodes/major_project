@@ -1,179 +1,99 @@
-// import { NextRequest, NextResponse } from 'next/server'
-// import { prisma } from '@/lib/prisma'
+import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import prisma from '@/lib/prisma'
 
-// export async function POST(request: NextRequest) {
-//   try {
-//     const { students } = await request.json()
+const safeString = (value: any): string => {
+  if (value === null || value === undefined) return ''
+  return String(value).trim()
+}
 
-//     if (!students || !Array.isArray(students)) {
-//       return NextResponse.json(
-//         { success: false, error: 'Invalid data format' },
-//         { status: 400 }
-//       )
-//     }
+const safeInt = (value: any, defaultValue: number = 0): number => {
+  const parsed = parseInt(String(value))
+  return isNaN(parsed) ? defaultValue : parsed
+}
 
-//     let successCount = 0
-//     const errors: string[] = []
-
-//     for (const row of students) {
-//       try {
-//         const studentId = row['Student ID'] || row.studentId || ''
-//         const name = row['Name'] || row.name || ''
-//         const email = row['Email'] || row.email || ''
-//         const contactNo = row['Contact No'] || row.contactNo || null
-//         const programmeCode = row['Programme Code'] || row.programmeCode || ''
-//         const currentSemester = parseInt(row['Current Semester'] || row.currentSemester || '1')
-//         const section = row['Section'] || row.section || null
-
-//         if (!studentId || !name || !email || !programmeCode) {
-//           errors.push(`Missing required fields for: ${name || email || studentId}`)
-//           continue
-//         }
-
-//         // Find programme
-//         const programme = await prisma.programme.findFirst({
-//           where: { programmeCode }
-//         })
-
-//         if (!programme) {
-//           errors.push(`Programme not found: ${programmeCode}`)
-//           continue
-//         }
-
-//         // Check if user/student already exists
-//         const existingStudent = await prisma.student.findFirst({
-//           where: {
-//             OR: [
-//               { email },
-//               { studentId }
-//             ]
-//           }
-//         })
-
-//         if (existingStudent) {
-//           errors.push(`Student already exists: ${email} or ${studentId}`)
-//           continue
-//         }
-
-//         // Create user
-//         const user = await prisma.user.create({
-//           data: {
-//             email,
-//             name,
-//             role: 'STUDENT'
-//           }
-//         })
-
-//         // Create student
-//         await prisma.student.create({
-//           data: {
-//             userId: user.id,
-//             studentId,
-//             name,
-//             email,
-//             contactNo,
-//             programmeId: programme.id,
-//             currentSemester,
-//             section
-//           }
-//         })
-
-//         successCount++
-//       } catch (error: any) {
-//         errors.push(`Error processing ${row.name || row.email}: ${error.message}`)
-//       }
-//     }
-
-//     return NextResponse.json({
-//       success: true,
-//       count: successCount,
-//       errors: errors.length > 0 ? errors : undefined,
-//       message: `Successfully uploaded ${successCount} students${errors.length > 0 ? `, ${errors.length} failed` : ''}`
-//     })
-//   } catch (error: any) {
-//     console.error('Bulk upload error:', error)
-//     return NextResponse.json(
-//       { success: false, error: error.message || 'Bulk upload failed' },
-//       { status: 500 }
-//     )
-//   }
-// }
-
-import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
     const { students } = body
 
     if (!Array.isArray(students) || students.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Invalid students data' },
+        { error: 'No valid student data provided' },
         { status: 400 }
       )
     }
 
+    // Get all programmes
+    const programmes = await prisma.programme.findMany()
+
     let successCount = 0
-    const errors: any[] = []
+    let skipCount = 0
+    const errors: string[] = []
 
-    for (const studentData of students) {
+    for (const row of students) {
       try {
-        const {
-          'Student ID': studentId,
-          'Name': name,
-          'Email': email,
-          'Contact No': contactNo,
-          'Programme Code': programmeCode,
-          'Current Semester': currentSemester,
-          'Section': section
-        } = studentData
+        const studentId = safeString(row['Student ID'] || row.studentId)
+        const name = safeString(row['Name'] || row.name)
+        const email = safeString(row['Email'] || row.email).toLowerCase()
+        const contactNo = safeString(row['Contact No'] || row.contactNo)
+        const programmeCode = safeString(row['Programme Code'] || row.programmeCode)
+        const currentSemester = safeInt(row['Current Semester'] || row.currentSemester, 1)
+        const section = safeString(row['Section'] || row.section)
 
-        if (!studentId || !name || !email || !programmeCode) {
-          errors.push({
-            row: studentId,
-            error: 'Missing required fields (Student ID, Name, Email, or Programme Code)'
-          })
+        if (!studentId || !name || !email) {
+          errors.push(`${studentId || 'Unknown'}: Missing required fields`)
           continue
         }
 
-        // Find programme by code
-        const programme = await prisma.programme.findFirst({
-          where: { programmeCode }
-        })
-
+        const programme = programmes.find(p => p.programmeCode === programmeCode)
         if (!programme) {
-          errors.push({
-            row: studentId,
-            error: `Programme code '${programmeCode}' not found`
-          })
+          errors.push(`${studentId}: Programme "${programmeCode}" not found`)
           continue
         }
 
         // Check if student exists
         const existingStudent = await prisma.student.findFirst({
-          where: { OR: [{ studentId }, { email }] }
+          where: {
+            OR: [
+              { studentId },
+              { email }
+            ]
+          }
         })
 
         if (existingStudent) {
-          errors.push({
-            row: studentId,
-            error: 'Student ID or Email already exists'
-          })
+          skipCount++
           continue
         }
 
-        // Check or create user
-        let user = await prisma.user.findUnique({
+        // Check if user exists
+        let userRecord = await prisma.user.findUnique({
           where: { email }
         })
 
-        if (!user) {
-          user = await prisma.user.create({
+        // Create user if doesn't exist
+        if (!userRecord) {
+          userRecord = await prisma.user.create({
             data: {
               email,
               name,
-              role: 'STUDENT'
+            }
+          })
+
+          // Assign STUDENT role
+          await prisma.userRole.create({
+            data: {
+              userId: userRecord.id,
+              role: 'STUDENT',
+              isActive: true
             }
           })
         }
@@ -181,35 +101,36 @@ export async function POST(request: NextRequest) {
         // Create student
         await prisma.student.create({
           data: {
-            userId: user.id,
+            userId: userRecord.id,
             studentId,
             name,
             email,
             contactNo: contactNo || null,
             programmeId: programme.id,
-            currentSemester: parseInt(currentSemester) || 1,
+            currentSemester,
             section: section || null
           }
         })
 
         successCount++
       } catch (error: any) {
-        errors.push({
-          row: studentData['Student ID'],
-          error: error.message
-        })
+        const id = safeString(row['Student ID'] || row.studentId || 'Unknown')
+        errors.push(`${id}: ${error.message}`)
       }
     }
+
+    const message = `Successfully uploaded ${successCount} students. ${skipCount} skipped (already exist).`
 
     return NextResponse.json({
       success: true,
       count: successCount,
-      errors: errors.length > 0 ? errors : undefined
+      message,
+      errors: errors.length > 0 ? errors.slice(0, 10) : undefined
     })
-  } catch (error: any) {
-    console.error('Bulk upload error:', error)
+  } catch (error) {
+    console.error('Error bulk uploading students:', error)
     return NextResponse.json(
-      { success: false, error: error.message || 'Bulk upload failed' },
+      { error: 'Failed to bulk upload students' },
       { status: 500 }
     )
   }

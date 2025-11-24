@@ -1,37 +1,82 @@
 'use client'
 
-import { useAuth } from '@/contexts/AuthContext'
-import { useRouter } from 'next/navigation'
+import { switchRole } from '@/app/actions/auth'
+import { Role } from '@prisma/client'
+import { useState, useTransition } from 'react'
 
-export function RoleSwitcher() {
-  const { currentRole, availableRoles, isMultiRole, switchRole } = useAuth()
-  const router = useRouter()
+interface RoleSwitcherProps {
+  userRoles: Role[]
+  currentRole: Role
+}
 
-  if (!isMultiRole) return null
+export default function RoleSwitcher({ userRoles, currentRole }: RoleSwitcherProps) {
+  const [error, setError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
 
-  const handleRoleSwitch = (role: 'ADMIN' | 'FACULTY' | 'STUDENT') => {
-    switchRole(role)
-    if (role === 'ADMIN') router.push('/admin/dashboard')
-    if (role === 'FACULTY') router.push('/faculty/dashboard')
-    if (role === 'STUDENT') router.push('/student/dashboard')
+  if (userRoles.length <= 1) return null
+
+  const handleRoleSwitch = (role: Role) => {
+    setError(null)
+    startTransition(async () => {
+      const result = await switchRole(role)
+      if (result?.error) {
+        setError(result.error)
+      }
+    })
+  }
+
+  const getRoleColor = (role: Role): string => {
+    switch (role) {
+      case 'ADMIN':
+        return 'bg-purple-600 hover:bg-purple-700'
+      case 'FACULTY':
+        return 'bg-blue-600 hover:bg-blue-700'
+      case 'STUDENT':
+        return 'bg-green-600 hover:bg-green-700'
+      default:
+        return 'bg-gray-600 hover:bg-gray-700'
+    }
+  }
+
+  const getRoleLabel = (role: Role): string => {
+    return role.charAt(0) + role.slice(1).toLowerCase()
   }
 
   return (
-    <div className="flex items-center gap-2 p-2 bg-gray-100 rounded-lg">
-      <span className="text-sm font-medium text-gray-700">Switch Role:</span>
-      {availableRoles.map((role) => (
-        <button
-          key={role}
-          onClick={() => handleRoleSwitch(role)}
-          className={`px-3 py-1 text-sm rounded ${
-            currentRole === role
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-700 hover:bg-gray-50'
-          }`}
-        >
-          {role}
-        </button>
-      ))}
+    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+      <h3 className="text-sm font-semibold text-gray-700 mb-3">
+        Switch Dashboard
+      </h3>
+      
+      {error && (
+        <div className="mb-3 text-xs text-red-600 bg-red-50 p-2 rounded">
+          {error}
+        </div>
+      )}
+      
+      <div className="flex flex-wrap gap-2">
+        {userRoles.map((role) => (
+          <button
+            key={role}
+            onClick={() => handleRoleSwitch(role)}
+            disabled={currentRole === role || isPending}
+            className={`px-4 py-2 rounded-lg text-sm font-medium text-white transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+              currentRole === role
+                ? getRoleColor(role) + ' cursor-not-allowed'
+                : getRoleColor(role)
+            }`}
+          >
+            {getRoleLabel(role)}
+            {currentRole === role && (
+              <span className="ml-2 text-xs">✓</span>
+            )}
+          </button>
+        ))}
+      </div>
+      
+      {isPending && (
+        <p className="mt-2 text-xs text-gray-500">Switching...</p>
+      )}
     </div>
   )
 }

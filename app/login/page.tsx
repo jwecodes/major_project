@@ -253,7 +253,6 @@
 
 import { useState, useEffect } from 'react'
 import { sendOTP, verifyOTP } from '@/app/actions/auth'
-import { useSearchParams } from 'next/navigation'
 import { Mail, Lock, ArrowRight, Loader } from 'lucide-react'
 
 export default function LoginPage() {
@@ -264,12 +263,10 @@ export default function LoginPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [countdown, setCountdown] = useState(0)
 
-  const searchParams = useSearchParams()
-  const redirect = searchParams.get('redirect') // kept for future use if you need it
-
+  // Countdown timer for OTP expiry
   useEffect(() => {
     if (countdown > 0) {
-      const timer = setTimeout(() => setCountdown((s) => s - 1), 1000)
+      const timer = setTimeout(() => setCountdown((prev) => prev - 1), 1000)
       return () => clearTimeout(timer)
     }
   }, [countdown])
@@ -289,11 +286,10 @@ export default function LoginPage() {
       if (result.error) {
         setMessage({ type: 'error', text: result.error })
       } else {
-        // Store email for faculty portal pages
+        // 🔹 Save email for faculty + student portals
         if (typeof window !== 'undefined') {
           localStorage.setItem('facultyEmail', cleanEmail)
-          // If you ever store facultyId elsewhere, you can also clear it here:
-          // localStorage.removeItem('facultyId')
+          localStorage.setItem('studentEmail', cleanEmail)
         }
 
         setMessage({
@@ -316,6 +312,7 @@ export default function LoginPage() {
   const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    // Validate OTP format
     const cleanOtp = otp.trim()
     if (cleanOtp.length !== 6 || !/^\d{6}$/.test(cleanOtp)) {
       setMessage({ type: 'error', text: 'OTP must be exactly 6 digits' })
@@ -335,12 +332,12 @@ export default function LoginPage() {
       if (result?.error) {
         setMessage({ type: 'error', text: result.error })
       }
-      // On success, the server action will redirect automatically
+      // ✅ On success, the server action will redirect based on role
     } catch (error: any) {
       console.error('Verify OTP error:', error)
 
+      // Next server actions throw NEXT_REDIRECT on success; just let it happen
       if (error?.message === 'NEXT_REDIRECT') {
-        // Successful login; Next.js is handling the redirect
         return
       }
 
@@ -366,20 +363,21 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl p-10 border border-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Teaching Portal</h1>
-          <p className="text-gray-600 text-sm">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Teaching Portal</h1>
+          <p className="text-gray-600">
             {step === 'email'
               ? 'Enter your email to continue'
               : 'Enter the OTP sent to your email'}
           </p>
         </div>
 
+        {/* Message banner */}
         {message && (
           <div
-            className={`mb-6 p-4 rounded-lg text-sm ${
+            className={`mb-6 p-4 rounded-lg ${
               message.type === 'success'
                 ? 'bg-green-50 text-green-700 border border-green-200'
                 : 'bg-red-50 text-red-700 border border-red-200'
@@ -399,14 +397,14 @@ export default function LoginPage() {
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <input
                   id="email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={e => setEmail(e.target.value)}
                   placeholder="your.email@university.edu"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 text-sm"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                   required
                   disabled={loading}
                 />
@@ -445,7 +443,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 disabled
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 text-sm"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
               />
             </div>
 
@@ -457,16 +455,14 @@ export default function LoginPage() {
                 One-Time Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <input
                   id="otp"
                   type="text"
                   value={otp}
-                  onChange={(e) =>
-                    setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))
-                  }
+                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="Enter 6-digit OTP"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 text-center text-2xl tracking-[0.4em]"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 text-center text-2xl tracking-widest"
                   maxLength={6}
                   required
                   disabled={loading}
@@ -476,9 +472,9 @@ export default function LoginPage() {
             </div>
 
             {countdown > 0 && (
-              <p className="text-center text-xs text-gray-600">
+              <p className="text-center text-sm text-gray-600">
                 OTP expires in{' '}
-                <span className="font-semibold text-blue-600">
+                <span className="font-bold text-blue-600">
                   {formatTime(countdown)}
                 </span>
               </p>
@@ -499,7 +495,7 @@ export default function LoginPage() {
               )}
             </button>
 
-            <div className="flex justify-between text-xs">
+            <div className="flex justify-between text-sm">
               <button
                 type="button"
                 onClick={() => {

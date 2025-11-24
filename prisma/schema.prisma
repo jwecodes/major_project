@@ -411,3 +411,14 @@ model StudentEnrollment {
   @@index([courseId])
   @@map("student_enrollments")
 }
+
+model EmailOtp {
+  id        String   @id @default(uuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@map("email_otps")
+}

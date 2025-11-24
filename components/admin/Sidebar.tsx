@@ -46,16 +46,6 @@ export default function Sidebar() {
       label: 'Course Coordination',
       href: '/admin/course-coordination',
       icon: Award // or use any appropriate icon
-    },
-    {
-      label: 'Content Approval',
-      href: '/admin/content-approval',
-      icon: FileText
-    },
-    {
-      label: 'Settings',
-      href: '/admin/settings',
-      icon: Settings
     }
   ]
 
